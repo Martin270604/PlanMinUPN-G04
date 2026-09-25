@@ -1,0 +1,43 @@
+{
+  "audience_role": "student_project",
+  "campaigns": [
+    "C01",
+    "C02",
+    "C03"
+  ],
+  "canonical_full_exploration_release": true,
+  "dataset_id": "DS04",
+  "file_sha256": {
+    "README.md": "f77d3cd62acf3e81f8acc2487364ec461319f1c8b15406425b2b666c76c3264f",
+    "alteration.csv": "f694c0bbd6cb51cfd815b969269b593974d5c199142b24ebb4d4f007e85acb21",
+    "assay.csv": "c0b8e89bb36aa74abcbe469374509839ef02bd378276ab1b50db8684c119aefe",
+    "collar.csv": "1ef363eac84eb24dafaa641cb276cf729b10d7ebbaa1098472e90bd6310d3b9f",
+    "data_dictionary.csv": "a064bd18a482f6868f1f257ce839940792e37d2338f00858214b742235cb2ff3",
+    "density.csv": "a872f61e4d0df78d843781723f2322fb217c4f60104a5a1d73476d698ba496df",
+    "lithology.csv": "7169eccf55459b3684b7b67669c58c614cc4aad81146e813a935dcff3500df2b",
+    "survey.csv": "41291c50accb896c3f6d3efd755770bd37c2c1d92751521573dcfe2702a41e6a"
+  },
+  "files": [
+    "collar.csv",
+    "survey.csv",
+    "lithology.csv",
+    "alteration.csv",
+    "assay.csv",
+    "density.csv",
+    "README.md",
+    "data_dictionary.csv"
+  ],
+  "n_alteration_intervals": 0,
+  "n_assays": 5275,
+  "n_density_samples": 425,
+  "n_holes": 35,
+  "n_lithology_intervals": 117,
+  "n_surveys": 270,
+  "project_id": "cerro_rojo",
+  "project_name": "Cerro Rojo",
+  "release_id": "EXP03",
+  "release_type": "exploration",
+  "resource_or_reserve_statement": false,
+  "schema_version": "1.0",
+  "synthetic_data": true
+}
