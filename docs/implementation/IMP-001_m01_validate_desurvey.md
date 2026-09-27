@@ -6,7 +6,7 @@
 - **Module:** M01 — Validate & Desurvey
 - **Date:** 2026-09-27
 - **Group:** G04
-- **Participants:** JorgeSanchez (pendiente de reemplazar por los nombres del equipo)
+- **Participants:** Jorge Sanchez -  Erwin Segundo - Alesandra Guevara (pendiente de reemplazar por los nombres del equipo)
 - **Status:** IN_PROGRESS
 
 ---
