@@ -13,15 +13,15 @@
 
 ## 2. Problema minero
 
-Preparar las tablas de sondajes del release para su validación y posterior
-desurvey. Esta etapa implementa únicamente la lectura de datos y la validación
-de contratos documentados; todavía no calcula trayectorias.
+Preparar, validar y desurveyar las tablas de sondajes del release, y presentar
+las trayectorias y los intervalos ya posicionados en una visualización 3D
+interactiva en el sistema cartesiano local.
 
 ## 3. Objetivo
 
-Cargar collar, survey, assay, lithology y density en memoria sin modificar los
-archivos fuente y reportar incumplimientos del diccionario de datos, del
-manifest y de las relaciones por `hole_id`.
+Cargar y validar las fuentes, calcular trayectorias y posicionar intervalos
+según las decisiones aprobadas, y visualizar esos resultados calculados sin
+reprocesar su geometría ni modificar los archivos fuente.
 
 ## 4. Inputs
 
@@ -35,6 +35,8 @@ manifest y de las relaciones por `hole_id`.
 | Alteration | Intervalos de alteración cuando estén disponibles | m según diccionario | `data/raw/alteration.csv` | Sí | Esquema y conteo del manifest; 0 registros se reportan como no disponibles |
 | Diccionario | Definiciones de campos, unidades y tipos | No aplica | `data/raw/data_dictionary.csv` | Sí | Columnas requeridas y definiciones aplicables a cada tabla |
 | Manifest | Identidad del release, archivos y conteos publicados | No aplica | `data/raw/release_manifest.json` | Sí | Archivos, conteos e identidad del dataset/proyecto |
+| Trayectoria calculada | Estaciones XYZ previamente desurveyadas | m | `data/processed/drillhole_trajectory.csv` / memoria del pipeline | Sí | Coordenadas finitas y MD existente |
+| Intervalos posicionados | XYZ de FROM/MID/TO y atributos observados | m para coordenadas; unidades analíticas conservadas | `data/processed/lithology_xyz.csv`, `assay_xyz.csv` / memoria del pipeline | Sí para las capas correspondientes | Esquema requerido para la capa |
 
 ## 5. Outputs
 
@@ -43,9 +45,12 @@ manifest y de las relaciones por `hole_id`.
 | `M01Inputs.tables` | Encabezados y filas CSV cargadas como texto, por archivo | Según campos originales | Memoria |
 | `M01Inputs.data_dictionary` | Diccionario leído | No aplica | Memoria |
 | `M01Inputs.manifest` | Manifest leído como objeto JSON | No aplica | Memoria |
+| `Trajectory.table` | Coordenadas XYZ en cada estación survey distinta | m | Memoria / `data/processed/drillhole_trajectory.csv` |
+| Tablas posicionadas | Campos fuente conservados más MD medio y XYZ en FROM/MID/TO | m para MD y coordenadas | `data/processed/assay_xyz.csv`, `lithology_xyz.csv`, `density_xyz.csv` |
 | `ValidationReport.findings` | Hallazgos con regla, severidad, tabla, fila, sondaje, campo, valor y condición esperada | No aplica | Memoria |
-| Findings M01 | Hallazgos individuales de validación | No aplica | `outputs/tables/m01_validation_findings.csv` |
+| Findings M01 | Hallazgos individuales, incluidos warnings de desurvey | No aplica | `outputs/tables/m01_validation_findings.csv` |
 | Resumen | Conteos por regla, severidad y tabla; incluye reglas sin findings | No aplica | `outputs/tables/m01_validation_summary.csv` |
+| Visualización 3D | Collars etiquetados, trayectorias, litología y opción de assay coloreada por `cu_pct`; indica que no hay topografía | m en ejes XYZ | `outputs/figures/m01_exploration_3d.html` |
 
 ## 6. Supuestos
 
@@ -54,9 +59,10 @@ tipos declarados por el diccionario.
 
 | ID | Supuesto | Justificación | Impacto |
 |---|---|---|---|
-| SUP-01 | Tolerancia de redondeo numérico de `1e-9 m` para comparar longitudes, límites de profundidad y continuidad de intervalos. | Las profundidades y longitudes del release se publican con nueve decimales; se evita sensibilidad a redondeo de representación binaria. | Diferencias absolutas menores o iguales a `1e-9 m` se tratan como igualdad en esas comparaciones. No es tolerancia geológica ni operacional. |
+| SUP-01 | Tolerancia de redondeo numérico de `1e-9 m` para comparar longitudes, límites de profundidad, continuidad de intervalos y límites de posicionamiento. | Las profundidades y longitudes del release se publican con nueve decimales; se evita sensibilidad a redondeo de representación binaria. | Diferencias absolutas menores o iguales a `1e-9 m` se tratan como igualdad en esas comparaciones. No es tolerancia geológica ni operacional. |
 | SUP-02 | La cobertura de densidad es la unión de intervalos válidos recortada a `[0, final_depth_m]`; no tiene umbral de aceptación. | El plan define cobertura informativa y no especifica umbral. | El porcentaje es descriptivo; no implica representatividad. |
 | SUP-03 | La equivalencia entre `CAMPAIGN_0X` y `C0X` no se confirma automáticamente. | Las tablas y el manifest usan formatos distintos; el equipo indicó que la equivalencia está pendiente. | Se emite WARNING cuando el identificador de tabla no coincide literalmente con el manifest. |
+| SUP-04 | Positioning interpola linealmente XYZ entre estaciones consecutivas de la trayectoria ya desurveyada. | El contrato pide interpolar XYZ y prohíbe recalcular/desduplicar la lógica de desurvey; no define otra interpolación. | Los XYZ de intervalos son interpolaciones sobre los segmentos entre estaciones, no una nueva evaluación de la curva minimum-curvature dentro del tramo. |
 
 ## 7. Lógica minera
 
@@ -69,9 +75,10 @@ Reglas M01 implementadas:
 
 - **Collar:** `hole_id` único, `final_depth_m > 0` y coordenadas `x/y/z`
   numéricas y finitas; todos `ERROR`.
-- **Survey:** referencia a collar, profundidad no negativa, secuencia estricta
-  sin duplicados, estación en cero y profundidad dentro del collar; orientación
-  numérica y finita; todos `ERROR`.
+- **Survey:** referencia a collar, profundidad no negativa, secuencia ordenada,
+  estación en cero y profundidad dentro del collar; orientación numérica y
+  finita. Duplicado idéntico genera `WARNING` y se deduplica; duplicado
+  contradictorio es `ERROR`.
 - **Intervalos:** orden `from_m < to_m`, largo, límites y gaps/overlaps para
   assay, lithology y density. Overlaps son `ERROR` en assay/lithology y
   `WARNING` en density; gaps son `WARNING` en assay/lithology e `INFO` en
@@ -87,8 +94,18 @@ Reglas M01 implementadas:
 Brechas se evalúan también contra los extremos `[0, final_depth_m]`; overlaps y
 gaps se detectan por profundidad, independiente del orden de las filas.
 
-No se calculan ni modifican trayectorias. No se realizan interpretación
-geológica ni validaciones propias de desurvey.
+**ETAPA 7:** minimum curvature calcula el desplazamiento acumulado entre cada
+par de estaciones usando la dirección definida por azimuth horario desde +Y y
+dip desde la horizontal. La primera estación MD 0 se ancla exactamente al XYZ
+del collar; se utiliza la orientación survey para continuar. Survey idéntico
+repetido a igual MD genera WARNING y se deduplica; orientaciones contradictorias
+a igual MD son ERROR. No se agregan estaciones y no se extrapola después de la
+última medición.
+
+Positioning calcula `MID = (FROM + TO) / 2` y obtiene XYZ de FROM/MID/TO por
+interpolación lineal entre estaciones de la trayectoria ya calculada. Intervalos
+fuera del rango medido producen ERROR y no se devuelve una tabla posicionada
+parcial.
 
 ## 8. Diseño computacional
 
@@ -98,33 +115,51 @@ geológica ni validaciones propias de desurvey.
   alteration, diccionario y manifest; fuentes abiertas en modo lectura.
 - `src/m01/validator.py`: validación contractual y reglas aprobadas de M01.
 - `src/m01/validation_report.py`: escritura de findings y resumen por regla.
-- `main.py`: orquestación de carga, validación y escritura; no contiene reglas.
+- `src/m01/desurvey.py`: minimum curvature, comparación collar/survey en MD 0
+  y escritura de la trayectoria por estación.
+- `src/m01/positioning.py`: posicionamiento genérico de intervalos y escritura
+  de salidas; no recalcula trayectoria.
+- `src/m01/visualizer.py`: genera una figura Plotly desde tablas ya calculadas;
+  no calcula ni modifica geometría.
+- `main.py`: orquestación de carga, validación, desurvey y posicionamiento; no
+  contiene reglas ni cálculos geométricos y llama al visualizador al final.
 - `tests/m01/test_m01_data_contract.py`: pruebas contractuales con el release.
 - `tests/m01/test_m01_validation_rules.py`: casos en memoria y salida de reportes.
+- `tests/m01/test_desurvey.py`: casos A/B/C, collar, duplicados, MD 0,
+  orientación constante y release.
+- `tests/m01/test_positioning.py`: interpolación FROM/MID/TO, preservación de
+  campos, intervalos fuera de rango y tabla vacía.
+- `tests/m01/test_visualizer.py`: capas 3D, selector litología/assay y HTML
+  autocontenido.
 
 ### Funciones / clases principales
 
 - `load_m01_inputs(raw_dir) -> M01Inputs`
 - `validate_m01_inputs(inputs) -> ValidationReport`
+- `calculate_trajectory(collar, survey) -> Trajectory`
+- `position_intervals(trajectory, intervals, from_field, to_field) -> CsvTable`
 - `write_validation_outputs(report, output_dir) -> None`
+- `write_trajectory(trajectory, output_path) -> None`
+- `write_positioned_table(table, output_path) -> None`
+- `build_exploration_figure(collar, trajectory, lithology, assay) -> Figure`
+- `write_exploration_html(collar, trajectory, lithology, assay, output_path) -> Path`
 - `CsvTable`, `M01Inputs`, `ValidationFinding`, `ValidationReport`
 
 ### Contratos aún no implementados
 
 | Módulo | Input previsto | Output previsto |
 |---|---|---|
-| `desurvey.py` | Collar y survey validados | Trayectoria calculada por pozo y profundidad medida |
-| `positioning.py` | Trayectoria y tablas intervalares | Intervalos asociados a la trayectoria según el plan M01 |
 | `visualizer.py` | Trayectoria y resultados de posicionamiento | Visualización de inspección |
 | `exporter.py` | Resultados acordados de M01 | Archivos derivados fuera de `data/raw/` |
 
-Estos contratos no contienen implementación; sus detalles permanecen sujetos a
-las convenciones y decisiones aprobadas para M01.
+Exportación adicional permanece fuera del alcance actual.
 
 ### Dependencias relevantes
 
-- Solo biblioteca estándar de Python (`csv`, `json`, `pathlib`, `dataclasses`).
-- No se instalaron dependencias.
+- Biblioteca estándar de Python para carga y validación.
+- `plotly` para generar la visualización interactiva; se agregó a
+  `requirements.txt`. Ya estaba disponible en el entorno, por lo que no se
+  instalaron dependencias.
 
 ## 9. Etapas de implementación
 
@@ -195,9 +230,49 @@ las convenciones y decisiones aprobadas para M01.
   exactamente en azimuth y dip. Cada sondaje tiene una sola orientación survey
   distinta a lo largo de sus estaciones. Los metadatos confirman coordenadas
   locales y metros, pero no CRS/EPSG ni que X/Y sean globalmente Easting/Northing.
-- **Pendiente:** aprobación del equipo de las decisiones registradas antes de
-  comenzar el código de desurvey. No se escribió código ni se modificó
-  `data/raw/`.
+- **Pendiente en esa etapa:** aprobación del equipo antes de implementar
+  desurvey. GATE 6 fue posteriormente aprobado antes de iniciar ETAPA 7.
+
+### Etapa 7 — Desurvey y positioning inicial
+
+- **Fecha:** 2026-09-27.
+- **Objetivo:** implementar las decisiones geométricas aprobadas y obtener
+  coordenadas XYZ reproducibles para estaciones e intervalos.
+- **Trabajo realizado:** se implementó minimum curvature, controles de MD 0 y
+  estaciones duplicadas, posicionamiento lineal FROM/MID/TO, integración en
+  `main.py` y pruebas unitarias/sobre el release.
+- **Resultado:** 36 pruebas PASS; `main.py` calculó 270 estaciones para 35
+  sondajes y posicionó 5,817 intervalos (5,275 assay, 117 lithology, 425
+  density). Validación independiente: primeros XYZ coinciden con collar,
+  últimas profundidades coinciden con `final_depth_m`, MD crece y no se
+  observaron desplazamientos por segmento mayores que el avance medido. Los
+  ocho hashes de archivos fuente del manifest coinciden. Main reportó ERROR=0,
+  WARNING=15, INFO=11,047 (11,062 findings).
+- **Aprobación del equipo (GATE 7):** APROBADA. El equipo confirmó 36 pruebas
+  PASS y `main.py` con 0 ERROR. La verificación tangencial independiente tuvo
+  diferencia máxima `< 1e-9 m` en las 270 estaciones. Para `CR-C01-001`, Z va
+  de `3312 m` en MD 0 a `3083.26 m` en MD 230.
+- **Pendiente:** no se implementaron visualizer ni exporter en esta etapa;
+  visualizer se implementó en ETAPA 8.
+
+### Etapa 8 — Visualización 3D interactiva
+
+- **Fecha:** 2026-09-27.
+- **Objetivo:** visualizar resultados ya calculados, sin recalcular desurvey ni
+  positioning.
+- **Trabajo realizado:** `visualizer.py` construye capas de collars etiquetados,
+  trayectorias, intervalos litológicos categóricos y assay coloreado por
+  `cu_pct`, seleccionables desde un menú. Los ejes indican metros, el título
+  declara sistema cartesiano local sin CRS/EPSG (DECISION-06), y se señala la
+  ausencia de topografía del release. El HTML incluye Plotly embebido para uso
+  sin conexión; `main.py` lo genera al final.
+- **Resultado:** 39 pruebas PASS; `main.py` generó
+  `outputs/figures/m01_exploration_3d.html`. El pipeline conservó sus conteos de
+  salida: 270 estaciones/35 sondajes, 5,817 intervalos y findings
+  ERROR=0, WARNING=15, INFO=11,047.
+- **Aprobación del equipo:** APROBADA. El equipo abrió el HTML y confirmó que
+  muestra correctamente collars, trayectorias e intervalos.
+- **Pendiente:** exporter continúa fuera de alcance.
 
 ## 10. Decisiones
 
@@ -216,6 +291,23 @@ las convenciones y decisiones aprobadas para M01.
 metadatos; no se requiere una nueva dependencia.
 
 **Impacto:** la interpretación de los tipos queda centralizada en el validador.
+
+### DECISION-TECH-02 — Visualización HTML autocontenida
+
+**Problema:** compartir una vista 3D interactiva de resultados de M01 sin
+requerir conexión externa para cargar la biblioteca JavaScript.
+
+**Alternativas consideradas:**
+
+- A. HTML que carga Plotly desde un CDN.
+- B. HTML con Plotly embebido.
+
+**Alternativa seleccionada:** B, usando `include_plotlyjs=True`.
+
+**Justificación:** el artefacto requerido debe ser autocontenido e interactivo.
+
+**Impacto:** el HTML tiene mayor tamaño, pero no depende de red en el momento
+  de abrirlo.
 
 ### DECISION-01 — Sistema XYZ local
 
@@ -307,8 +399,7 @@ transformar de forma defendible a otro CRS.
 
 ## Casos manuales de control para desurvey
 
-Estos son resultados esperados por la convención geométrica aprobada; todavía
-no se ejecutaron porque el código de desurvey no está implementado.
+Estos resultados de control se ejecutaron en ETAPA 7 sobre casos sintéticos.
 
 | Caso | Orientación | Comportamiento esperado |
 |---|---|---|
@@ -326,12 +417,24 @@ src/m01/__init__.py
 src/m01/loader.py
 src/m01/validator.py
 src/m01/validation_report.py
+src/m01/desurvey.py
+src/m01/positioning.py
 tests/m01/__init__.py
 tests/m01/test_m01_data_contract.py
 tests/m01/test_m01_validation_rules.py
+tests/m01/test_desurvey.py
+tests/m01/test_positioning.py
+src/m01/visualizer.py
+tests/m01/test_visualizer.py
 main.py
+requirements.txt
+data/processed/drillhole_trajectory.csv
+data/processed/assay_xyz.csv
+data/processed/lithology_xyz.csv
+data/processed/density_xyz.csv
 outputs/tables/m01_validation_findings.csv
 outputs/tables/m01_validation_summary.csv
+outputs/figures/m01_exploration_3d.html
 docs/implementation/IMP-001_m01_validate_desurvey.md
 ```
 
@@ -347,13 +450,30 @@ python main.py
 Ejecutados desde la raíz `C:\Proyecto_Plan\PlanMinUPN-G04` con el entorno
 Python existente. `git diff --check` no reportó errores.
 
-### Resultado real
+### Resultado real de ETAPA 7
 
 - **Status:** PASS
-- **Tests passed:** 22
+- **Tests passed:** 36
 - **Tests failed:** 0
+- **Aprobación del equipo (GATE 7):** APROBADA.
+- **Verificación tangencial independiente del equipo:** diferencia máxima
+  `< 1e-9 m` en las 270 estaciones.
+- **Control reportado para `CR-C01-001`:** Z = `3312 m` en MD 0 y Z =
+  `3083.26 m` en MD 230.
 
 ### Ejecución de `main.py` sobre el release
+
+- **Trayectoria:** 270 estaciones para 35 sondajes.
+- **Intervalos posicionados:** assay 5,275; lithology 117; density 425; total
+  5,817.
+- **Controles del release:** primer XYZ igual al collar en los 35 sondajes;
+  última profundidad igual a `final_depth_m` en los 35; MD creciente y único;
+  todas las coordenadas finitas; sin incrementos espaciales mayores al
+  incremento MD.
+- **Estaciones añadidas/extrapoladas:** ninguna.
+- **Alteration:** tabla vacía aceptada sin error por el positioning genérico.
+- **Salidas:** `data/processed/drillhole_trajectory.csv`,
+  `assay_xyz.csv`, `lithology_xyz.csv`, `density_xyz.csv`.
 
 - **Findings:** 11,062
 - **ERROR:** 0
@@ -365,34 +485,63 @@ Python existente. `git diff --check` no reportó errores.
 - **Datos fuente:** los ocho hashes publicados en el manifest siguen
   coincidiendo; `data/raw/` no se modificó.
 
+### Resultado real de ETAPA 8
+
+- **Comando:** `python -m unittest discover -s tests -v`
+- **Resultado:** PASS; 39 pruebas aprobadas, 0 fallidas.
+- **Comando:** `python main.py`
+- **Resultado:** PASS; 270 estaciones de trayectoria para 35 sondajes; 5,817
+  intervalos posicionados; ERROR=0, WARNING=15, INFO=11,047.
+- **Visualización:** `outputs/figures/m01_exploration_3d.html` generado como
+  HTML completo con Plotly JavaScript embebido, selector Litología/Assay
+  `cu_pct`, ejes XYZ en metros, sistema cartesiano local sin CRS/EPSG y aviso
+  de topografía no disponible.
+- **Dependencias:** Plotly 7.1.0 ya estaba instalado en el entorno; se agregó
+  `plotly` a `requirements.txt`, sin instalar librerías.
+- **Aprobación del equipo (ETAPA 8):** APROBADA; el HTML fue abierto y se
+  verificó visualmente que muestra collars, trayectorias e intervalos.
+
 ## 13. Validación minera
 
 - [ ] Unidades consistentes.
 - [ ] Signos económicos correctos cuando corresponda.
 - [ ] Magnitudes razonables.
 - [ ] Restricciones operacionales respetadas.
-- [x] Reglas M01 y casos límite revisados computacionalmente.
-- [ ] Caso manual independiente revisado cuando es posible.
+- [x] Casos geométricos A/B/C y comparación tangencial ejecutados.
+- [x] Primer XYZ de cada pozo igual al collar.
+- [x] Última profundidad coincide con `final_depth_m` en el release.
+- [x] Continuidad discreta y MD creciente revisados.
+- [x] Posicionamiento de intervalos dentro de la trayectoria revisado.
+- [x] Visualización usa exclusivamente geometría e intervalos calculados.
+- [x] HTML interactivo generado y autocontenido.
+- [x] Ausencia de topografía indicada sin inventarla.
 
 ### Evidencia / comentario
 
-La ejecución produjo 0 errores, 15 advertencias de nomenclatura de campaña y
-11,047 observaciones INFO. Los ceros de assay y los gaps/cobertura de density
-requieren lectura del equipo. El resultado no valida trayectorias ni sustituye
-la revisión y aprobación del equipo.
+Los casos A/B/C y control tangencial pasan. En el release, se observaron 35
+trayectorias completas hasta `final_depth_m`; no se añadieron estaciones. La
+posición de intervalos conserva los atributos analíticos. El visualizador usa
+los XYZ ya calculados en las tablas del pipeline; no hay fuente topográfica en
+este release, por lo que la figura lo indica en el título. Persisten 15
+warnings de campaña y 11,047 INFO de Gate 5, no relacionados con la geometría.
+El equipo aprobó GATE 7 con la comparación tangencial independiente y aprobó
+ETAPA 8 tras abrir y revisar el HTML.
 
 ## 14. Limitaciones y pendientes
 
 ### LIMITATION-01
 
-No se validan convenciones angulares ni geometría del survey. No se calculan
-coordenadas de trayectoria.
+El XYZ entre estaciones de posicionamiento usa interpolación lineal entre
+estaciones calculadas; no reevalúa la curva minimum-curvature en MD intermedios.
+No hay CRS/EPSG global según la limitación aceptada en DECISION-06.
 
 ### FUTURE-01
 
-Implementar `desurvey.py` solo después de la revisión/aprobación del equipo y el
-cierre de Gate 5. `positioning.py`, `visualizer.py` y `exporter.py` siguen fuera
-de este gate.
+La visualización representa las trayectorias mediante los segmentos de
+estaciones disponibles y posiciona cada intervalo litológico como el segmento
+FROM–TO ya calculado. No incorpora topografía porque el release no contiene esa
+superficie. Las etapas 7 y 8 fueron aprobadas por el equipo. Exportación
+adicional continúa pendiente y fuera del alcance.
 
 ## 15. Uso del agente de IA
 

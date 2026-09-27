@@ -59,6 +59,8 @@ VALIDATION_RULES = {
     "SURVEY_DEPTH_ZERO_STATION": ("ERROR", "survey.csv"),
     "SURVEY_DEPTH_WITHIN_COLLAR": ("ERROR", "survey.csv"),
     "SURVEY_ORIENTATION_FINITE": ("ERROR", "survey.csv"),
+    "SURVEY_DUPLICATE_IDENTICAL": ("WARNING", "survey.csv"),
+    "SURVEY_DUPLICATE_CONTRADICTORY": ("ERROR", "survey.csv"),
     "INTERVAL_FROM_BEFORE_TO_ASSAY": ("ERROR", "assay.csv"),
     "INTERVAL_FROM_BEFORE_TO_LITHOLOGY": ("ERROR", "lithology.csv"),
     "INTERVAL_FROM_BEFORE_TO_DENSITY": ("ERROR", "density.csv"),
@@ -557,24 +559,49 @@ def _validate_survey(
                 observed_value=depths,
             )
 
-        seen_depths: set[float] = set()
+        seen_depths: dict[float, tuple[int, dict[str, str | None]]] = {}
         previous_depth: float | None = None
         for row_number, row, depth in stations:
-            if depth in seen_depths or (
-                previous_depth is not None and depth < previous_depth
-            ):
+            if depth in seen_depths:
+                previous_row_number, previous_row = seen_depths[depth]
+                identical_orientation = all(
+                    _finite_number(row.get(field))
+                    == _finite_number(previous_row.get(field))
+                    for field in ("azimuth_deg", "dip_deg")
+                )
+                rule_id = (
+                    "SURVEY_DUPLICATE_IDENTICAL"
+                    if identical_orientation
+                    else "SURVEY_DUPLICATE_CONTRADICTORY"
+                )
+                _add(
+                    findings,
+                    rule_id,
+                    "survey.csv",
+                    "Duplicate depth has identical orientation; it will be "
+                    "deduplicated with a warning."
+                    if identical_orientation
+                    else "Duplicate depth does not have a unique orientation.",
+                    row_number=row_number,
+                    hole_id=hole_id,
+                    field="depth_m",
+                    observed_value=(
+                        f"depth={depth}; previous_row={previous_row_number}; "
+                        f"azimuth={row.get('azimuth_deg')}; dip={row.get('dip_deg')}"
+                    ),
+                )
+            elif previous_depth is not None and depth < previous_depth:
                 _add(
                     findings,
                     "SURVEY_DEPTH_ORDERED",
                     "survey.csv",
-                    "Survey depths are strictly increasing and have no duplicates "
-                    "within each hole.",
+                    "Survey depths are in non-decreasing order within each hole.",
                     row_number=row_number,
                     hole_id=hole_id,
                     field="depth_m",
                     observed_value=depth,
                 )
-            seen_depths.add(depth)
+            seen_depths.setdefault(depth, (row_number, row))
             previous_depth = depth
 
             collar_record = collar_lookup.get(hole_id)
