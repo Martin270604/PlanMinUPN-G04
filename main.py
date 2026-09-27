@@ -10,6 +10,7 @@ from src.m01.positioning import position_intervals, write_positioned_table
 from src.m01.validation_report import write_validation_outputs
 from src.m01.validator import validate_m01_inputs
 from src.m01.visualizer import write_exploration_html
+from src.m01.validation_plots import generate_validation_plots
 
 
 def main() -> None:
@@ -77,6 +78,11 @@ def main() -> None:
         positioned["assay.csv"],
         project_dir / "outputs" / "figures" / "m01_exploration_3d.html",
     )
+    validation_plot_outputs = generate_validation_plots(
+        project_dir / "data" / "processed",
+        project_dir / "outputs" / "figures",
+        project_dir / "outputs" / "tables" / "m01_validacion_espacial.csv",
+    )
 
     severity_counts = Counter(
         finding.severity for finding in complete_report.findings
@@ -89,7 +95,8 @@ def main() -> None:
         "positioned; findings "
         f"ERROR={severity_counts['ERROR']}, "
         f"WARNING={severity_counts['WARNING']}, "
-        f"INFO={severity_counts['INFO']}; visualization={visualization_path}."
+        f"INFO={severity_counts['INFO']}; visualization={visualization_path}; "
+        f"spatial_metrics={validation_plot_outputs['spatial_metrics']}."
     )
 
 

@@ -6,7 +6,7 @@
 - **Module:** M01 — Validate & Desurvey
 - **Date:** 2026-09-27
 - **Group:** G04
-- **Participants:** Jorge Sanchez -  Erwin Segundo - Alesandra Guevara (pendiente de reemplazar por los nombres del equipo)
+- **Participants:** Jorge Martín Sánchez Linares, Erwin Segundo Olivera Cercado, Alesandra Briyit Guevara Díaz
 - **Status:** IN_PROGRESS
 
 ---
@@ -51,6 +51,8 @@ reprocesar su geometría ni modificar los archivos fuente.
 | Findings M01 | Hallazgos individuales, incluidos warnings de desurvey | No aplica | `outputs/tables/m01_validation_findings.csv` |
 | Resumen | Conteos por regla, severidad y tabla; incluye reglas sin findings | No aplica | `outputs/tables/m01_validation_summary.csv` |
 | Visualización 3D | Collars etiquetados, trayectorias, litología y opción de assay coloreada por `cu_pct`; indica que no hay topografía | m en ejes XYZ | `outputs/figures/m01_exploration_3d.html` |
+| Figuras estáticas de validación | Planta, sección litológica proyectada y Cu ponderado por longitud según cota y litología | m y unidades de `cu_pct` | `outputs/figures/m01_planta.png`, `m01_seccion_litologia.png`, `m01_cu_cota_litologia.png` |
+| Métricas espaciales por pozo | Vecino de trayectoria más próximo, distancia 3D, profundidad vertical, cota de fondo y Cu en los últimos 10 m | m y `cu_pct` | `outputs/tables/m01_validacion_espacial.csv` |
 
 ## 6. Supuestos
 
@@ -63,6 +65,8 @@ tipos declarados por el diccionario.
 | SUP-02 | La cobertura de densidad es la unión de intervalos válidos recortada a `[0, final_depth_m]`; no tiene umbral de aceptación. | El plan define cobertura informativa y no especifica umbral. | El porcentaje es descriptivo; no implica representatividad. |
 | SUP-03 | La equivalencia entre `CAMPAIGN_0X` y `C0X` no se confirma automáticamente. | Las tablas y el manifest usan formatos distintos; el equipo indicó que la equivalencia está pendiente. | Se emite WARNING cuando el identificador de tabla no coincide literalmente con el manifest. |
 | SUP-04 | Positioning interpola linealmente XYZ entre estaciones consecutivas de la trayectoria ya desurveyada. | El contrato pide interpolar XYZ y prohíbe recalcular/desduplicar la lógica de desurvey; no define otra interpolación. | Los XYZ de intervalos son interpolaciones sobre los segmentos entre estaciones, no una nueva evaluación de la curva minimum-curvature dentro del tramo. |
+| SUP-05 | La profundidad vertical se calcula como Z del collar menos Z de la última estación; el Cu de los últimos 10 m se pondera por longitud de intersección con ese tramo. | DECISION-01 establece Z positivo hacia arriba; los ensayos son intervalos que pueden cruzar el límite del tramo final. | Si la cobertura de assay es parcial, el promedio usa solo longitud con datos y la tabla reporta también `cu_covered_length_last_10m_m`. |
+| SUP-06 | Las bandas de 50 m para `mid_z` se anclan en múltiplos de 50 m respecto de Z=0 (`floor(mid_z / 50) * 50`). | Se requiere agrupar en bandas de 50 m y no se especificó otro origen de bandas. | Cada ensayo se asigna a una sola banda por su cota media; el Cu de la combinación banda/litología se pondera por longitud del assay. |
 
 ## 7. Lógica minera
 
@@ -121,8 +125,12 @@ parcial.
   de salidas; no recalcula trayectoria.
 - `src/m01/visualizer.py`: genera una figura Plotly desde tablas ya calculadas;
   no calcula ni modifica geometría.
+- `src/m01/validation_plots.py`: genera figuras estáticas y métricas espaciales
+  leyendo `drillhole_trajectory.csv`, `lithology_xyz.csv` y `assay_xyz.csv` de
+  `data/processed/`; no lee `data/raw/` ni recalcula trayectoria/posicionamiento.
 - `main.py`: orquestación de carga, validación, desurvey y posicionamiento; no
-  contiene reglas ni cálculos geométricos y llama al visualizador al final.
+  contiene reglas ni cálculos geométricos y llama a visualización/figuras de
+  control al final.
 - `tests/m01/test_m01_data_contract.py`: pruebas contractuales con el release.
 - `tests/m01/test_m01_validation_rules.py`: casos en memoria y salida de reportes.
 - `tests/m01/test_desurvey.py`: casos A/B/C, collar, duplicados, MD 0,
@@ -131,6 +139,8 @@ parcial.
   campos, intervalos fuera de rango y tabla vacía.
 - `tests/m01/test_visualizer.py`: capas 3D, selector litología/assay y HTML
   autocontenido.
+- `tests/m01/test_validation_plots.py`: creación de PNG y comprobación de
+  distancia, profundidad vertical, cota de fondo y promedio de Cu final.
 
 ### Funciones / clases principales
 
@@ -143,6 +153,7 @@ parcial.
 - `write_positioned_table(table, output_path) -> None`
 - `build_exploration_figure(collar, trajectory, lithology, assay) -> Figure`
 - `write_exploration_html(collar, trajectory, lithology, assay, output_path) -> Path`
+- `generate_validation_plots(processed_dir, figures_dir, metrics_path) -> dict[str, Path]`
 - `CsvTable`, `M01Inputs`, `ValidationFinding`, `ValidationReport`
 
 ### Contratos aún no implementados
@@ -160,6 +171,8 @@ Exportación adicional permanece fuera del alcance actual.
 - `plotly` para generar la visualización interactiva; se agregó a
   `requirements.txt`. Ya estaba disponible en el entorno, por lo que no se
   instalaron dependencias.
+- `matplotlib` para producir figuras estáticas; está declarado en
+  `requirements.txt` y se instaló en el entorno al no estar disponible.
 
 ## 9. Etapas de implementación
 
@@ -273,6 +286,25 @@ Exportación adicional permanece fuera del alcance actual.
 - **Aprobación del equipo:** APROBADA. El equipo abrió el HTML y confirmó que
   muestra correctamente collars, trayectorias e intervalos.
 - **Pendiente:** exporter continúa fuera de alcance.
+
+### Etapa 9 — Validación espacial: figuras y métricas desde productos procesados
+
+- **Fecha:** 2026-09-27.
+- **Objetivo:** producir figuras estáticas de control y métricas por sondaje
+  exclusivamente a partir de resultados existentes en `data/processed/`.
+- **Trabajo realizado:** `validation_plots.py` genera planta con campañas,
+  sección litológica proyectada en azimut 145° y Cu por bandas de 50 m y
+  litología. Calcula distancias mínimas exactas entre segmentos de las
+  polilíneas XYZ de sondajes diferentes, y métricas de profundidad vertical,
+  cota de fondo y Cu ponderado por longitud en los últimos 10 m. Los collars
+  se obtienen de las estaciones MD=0; las campañas, de tablas intervalares
+  procesadas.
+- **Resultado:** 40 pruebas PASS; `main.py` genera las tres figuras PNG y
+  `m01_validacion_espacial.csv` con 35 filas. La distancia mínima global
+  observada es 5.9793 m entre CR-C03-001 y CR-C03-005; todas las filas tienen
+  10 m de cobertura assay en el último tramo. Los ocho hashes raw del manifest
+  permanecieron iguales.
+- **Pendiente:** revisión y aprobación del equipo.
 
 ## 10. Decisiones
 
@@ -426,6 +458,8 @@ tests/m01/test_desurvey.py
 tests/m01/test_positioning.py
 src/m01/visualizer.py
 tests/m01/test_visualizer.py
+src/m01/validation_plots.py
+tests/m01/test_validation_plots.py
 main.py
 requirements.txt
 data/processed/drillhole_trajectory.csv
@@ -435,6 +469,10 @@ data/processed/density_xyz.csv
 outputs/tables/m01_validation_findings.csv
 outputs/tables/m01_validation_summary.csv
 outputs/figures/m01_exploration_3d.html
+outputs/figures/m01_planta.png
+outputs/figures/m01_seccion_litologia.png
+outputs/figures/m01_cu_cota_litologia.png
+outputs/tables/m01_validacion_espacial.csv
 docs/implementation/IMP-001_m01_validate_desurvey.md
 ```
 
@@ -501,6 +539,29 @@ Python existente. `git diff --check` no reportó errores.
 - **Aprobación del equipo (ETAPA 8):** APROBADA; el HTML fue abierto y se
   verificó visualmente que muestra collars, trayectorias e intervalos.
 
+### Resultado real de ETAPA 9
+
+- **Prueba focal:** `python -m unittest tests.m01.test_validation_plots -v` —
+  PASS, 1 prueba.
+- **Suite completa:** `python -m unittest discover -s tests -v` — PASS, 40
+  pruebas, 0 fallidas.
+- **Ejecución:** `python main.py` — PASS; 270 estaciones/35 sondajes, 5,817
+  intervalos, findings ERROR=0, WARNING=15, INFO=11,047.
+- **Figuras generadas:** `outputs/figures/m01_planta.png`,
+  `m01_seccion_litologia.png` y `m01_cu_cota_litologia.png`.
+- **Tabla generada:** `outputs/tables/m01_validacion_espacial.csv`, 35 filas.
+  Incluye `nearest_other_hole_id`, `minimum_trajectory_distance_3d_m`,
+  `vertical_depth_m`, `bottom_elevation_m`, `cu_mean_last_10m_pct` y
+  `cu_covered_length_last_10m_m`.
+- **Resultado espacial:** mínimo global de 5.979267 m entre CR-C03-001 y
+  CR-C03-005. La profundidad vertical observada abarca 222.552–428.008 m y la
+  cota de fondo 3059.530–3097.320 m. Cu de últimos 10 m tiene cobertura de
+  10.0 m en los 35 sondajes.
+- **Datos fuente:** los ocho hashes listados por el manifest coinciden; no se
+  modificó `data/raw/`.
+- **Dependencia:** matplotlib 3.11.2 disponible tras instalar la dependencia ya
+  declarada en `requirements.txt`.
+
 ## 13. Validación minera
 
 - [ ] Unidades consistentes.
@@ -515,6 +576,10 @@ Python existente. `git diff --check` no reportó errores.
 - [x] Visualización usa exclusivamente geometría e intervalos calculados.
 - [x] HTML interactivo generado y autocontenido.
 - [x] Ausencia de topografía indicada sin inventarla.
+- [x] Figuras de validación generadas desde `data/processed/`.
+- [x] Distancias entre trayectorias calculadas en segmentos XYZ, sin muestreo
+  ni reprocesamiento de desurvey.
+- [x] Métricas por sondaje y cobertura de Cu de último tramo revisadas.
 
 ### Evidencia / comentario
 
@@ -541,7 +606,8 @@ La visualización representa las trayectorias mediante los segmentos de
 estaciones disponibles y posiciona cada intervalo litológico como el segmento
 FROM–TO ya calculado. No incorpora topografía porque el release no contiene esa
 superficie. Las etapas 7 y 8 fueron aprobadas por el equipo. Exportación
-adicional continúa pendiente y fuera del alcance.
+adicional continúa pendiente y fuera del alcance. ETAPA 9 generó métricas de
+control a partir de las polilíneas y los intervalos procesados.
 
 ## 15. Uso del agente de IA
 
