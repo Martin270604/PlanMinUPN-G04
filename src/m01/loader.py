@@ -15,6 +15,7 @@ M01_TABLE_FILES = (
     "assay.csv",
     "lithology.csv",
     "density.csv",
+    "alteration.csv",
 )
 
 
