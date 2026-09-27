@@ -183,9 +183,25 @@ las convenciones y decisiones aprobadas para M01.
   0 ERROR, 15 WARNING y 11,047 INFO. El resumen por regla suma 11,062.
 - **Pendiente:** revisión y aprobación del equipo; no avanzar a desurvey.
 
+### Etapa 6 — Revisión de decisiones geométricas
+
+- **Fecha:** 2026-09-27.
+- **Objetivo:** contrastar las decisiones geométricas del equipo con los
+  metadatos y observaciones reales antes de escribir código de desurvey.
+- **Trabajo realizado:** se revisaron `data_dictionary.csv`,
+  `data/raw/README.md`, las 35 filas de collar y las 270 estaciones survey; se
+  registraron DECISION-01 a DECISION-06 y los tres casos manuales de control.
+- **Resultado:** MD 0 existe en los 35 sondajes y collar/survey coinciden
+  exactamente en azimuth y dip. Cada sondaje tiene una sola orientación survey
+  distinta a lo largo de sus estaciones. Los metadatos confirman coordenadas
+  locales y metros, pero no CRS/EPSG ni que X/Y sean globalmente Easting/Northing.
+- **Pendiente:** aprobación del equipo de las decisiones registradas antes de
+  comenzar el código de desurvey. No se escribió código ni se modificó
+  `data/raw/`.
+
 ## 10. Decisiones
 
-### DECISION-01
+### DECISION-TECH-01 — Lectura CSV sin dependencias
 
 **Problema:** cargar CSV sin añadir dependencias ni alterar fuentes.
 
@@ -200,6 +216,108 @@ las convenciones y decisiones aprobadas para M01.
 metadatos; no se requiere una nueva dependencia.
 
 **Impacto:** la interpretación de los tipos queda centralizada en el validador.
+
+### DECISION-01 — Sistema XYZ local
+
+**Decisión del equipo:** X = Easting, Y = Northing, Z = elevación; Z positivo
+hacia arriba. Coordenadas expresadas en metros.
+
+**Evidencia del release:** `data_dictionary.csv` define `x` y `y` como
+coordenadas cartesianas locales, `z` como elevación, y asigna `m` a las tres.
+`data/raw/README.md` confirma un sistema cartesiano local y unidades métricas.
+
+**Evaluación:** la unidad y la interpretación de Z como elevación están
+respaldadas por los metadatos. Que el eje X sea específicamente Easting y el eje
+Y Northing no se puede confirmar con el diccionario o README: no se documenta
+orientación de ejes ni CRS. Se registra como convención local adoptada por el
+equipo, no como georreferenciación demostrada.
+
+### DECISION-02 — Convención de azimuth
+
+**Decisión del equipo:** grados, 0° hacia +Y/Norte, 90° hacia +X/Este, sentido
+horario.
+
+**Evidencia del release:** el diccionario define `azimuth_deg` en grados. Los
+valores observados en collar/survey abarcan `0°` a `325.000000001°`; entre los
+valores están 0°, 90°, 180° y 270°.
+
+**Evaluación:** unidad y rango numérico son consistentes con la decisión. Los
+valores por sí solos no demuestran el eje de referencia ni el sentido de giro;
+esas partes quedan registradas como convención acordada por el equipo, no como
+hecho inferido únicamente del dataset.
+
+### DECISION-03 — Convención de dip
+
+**Decisión del equipo:** grados medidos desde la horizontal; negativos hacia
+abajo y `-90°` vertical descendente.
+
+**Evidencia del release:** `dip_deg` está documentado en grados. Los valores
+observados abarcan `-85°` a `-71.925397240°`, tanto en collar como en survey.
+
+**Evaluación:** unidad y signos observados son consistentes con la convención
+adoptada; el release no documenta por sí solo el plano de referencia del dip.
+
+### DECISION-04 — Autoridad en MD = 0
+
+**Decisión del equipo:** survey gobierna la trayectoria. Si existe estación
+survey en MD 0, se compara con collar; diferencia absoluta mayor que `0.1°` en
+azimuth o dip produce `WARNING`. Si falta la estación, se produce `ERROR`.
+
+**Evidencia del release:** los 35 pozos tienen estación survey en `depth_m = 0`.
+En los 35, azimuth y dip coinciden exactamente con los respectivos valores del
+collar (diferencia absoluta máxima observada: `0°` para ambos).
+
+**Evaluación:** el comportamiento acordado es consistente con los registros
+actuales. La tolerancia `0.1°` es una regla de decisión del equipo, no un valor
+derivado del dataset. El control de estación faltante no se activa con este
+release.
+
+### DECISION-05 — Método de desurvey
+
+**Decisión del equipo:** usar Minimum Curvature para interpolar la trayectoria
+entre estaciones.
+
+**Evidencia del release:** al ordenar las 270 estaciones por pozo y profundidad,
+cada uno de los 35 pozos tiene un solo par distinto `(azimuth_deg, dip_deg)`;
+no se observan cambios de orientación dentro de un mismo pozo. El rango
+observado global es azimuth `0°`–`325.000000001°` y dip
+`-85°`–`-71.925397240°`.
+
+**Evaluación:** la selección es consistente con la intención de representar una
+transición gradual entre estaciones. Con orientaciones constantes a lo largo
+de cada pozo, tangential, balanced tangential y minimum curvature deben dar la
+misma trayectoria geométrica, salvo diferencias de redondeo numérico; esta
+equivalencia queda como control comparativo cuando se implemente el desurvey.
+La observación de orientación constante aplica a este release, no a otros
+datasets.
+
+### DECISION-06 — CRS/EPSG
+
+**Estado:** ACCEPTED — NON-BLOCKING LIMITATION.
+
+**Decisión del equipo:** M01 trabaja en el sistema cartesiano local del release;
+no hará transformaciones ni georreferenciación global.
+
+**Evidencia del release:** `data/raw/README.md` describe coordenadas del sistema
+cartesiano local. Ni dicho README ni `data_dictionary.csv` proporcionan
+identificador CRS/EPSG.
+
+**Limitación:** los resultados no permiten afirmar una ubicación global ni
+transformar de forma defendible a otro CRS.
+
+## Casos manuales de control para desurvey
+
+Estos son resultados esperados por la convención geométrica aprobada; todavía
+no se ejecutaron porque el código de desurvey no está implementado.
+
+| Caso | Orientación | Comportamiento esperado |
+|---|---|---|
+| A — Vertical | Dip `-90°` | X aproximadamente constante, Y aproximadamente constante y Z disminuye al aumentar MD. |
+| B — Horizontal Este | Azimuth `90°`, dip `0°` | X aumenta; Y y Z aproximadamente constantes. |
+| C — Inclinado Este | Azimuth `90°`, dip `-45°` | X aumenta, Z disminuye y Y aproximadamente constante. |
+
+“Aproximadamente constante” refleja tolerancia numérica del cálculo; no fija
+una tolerancia geométrica adicional.
 
 ## 11. Archivos creados o modificados
 
