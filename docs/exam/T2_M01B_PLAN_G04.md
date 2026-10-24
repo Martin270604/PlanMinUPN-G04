@@ -4,10 +4,246 @@
 
 - **Protocolo:** EXAM_T2_M01B v1.0, adoptado para esta sesión.
 - **Perfil:** TUTOR-EVALUADOR.
-- **Modo:** EVALUATION_PLAN conceptual (P0 solamente), bajo `RECOVERY_BLOCKED`.
-- **BASE_VERIFIED:** No; topografía B09 sigue RECOVERY_BLOCKED.
-- **Estado de producto:** baseline M01B histórico incompleto; composites M01B generados en B08, sin modelo de bloques.
-- **Alcance de este documento:** conservar decisiones de recuperación y preguntas conversadas. No es un plan resuelto ni autorización para implementar código.
+- **Modo actual (2026-10-24):** EVALUATION_PLAN; P2_GRID, P3_TOPO, P4_GEO_ASSIGN, P5_VALIDATION y P6_VISUALIZER implementados bajo sus gates aprobados. La revisión geológica independiente sigue pendiente; no se declara `MINING_VALIDATED` ni `READY_FOR_REVIEW`.
+- **BASE_VERIFIED:** Sí, con límites registrados: unidades de Topopl son empíricamente consistentes con metros, pero no están declaradas en el CSV; CRS/EPSG/datum tampoco constan. La superficie IDW preliminar se generó bajo P3; aún no cuenta con validación minera independiente.
+- **Estado de producto:** baseline M01B histórico incompleto; composites, grid, clasificación topográfica preliminar, asignación P4, métricas P5 y visualizador P6 generados. La inspección visual y la revisión geológica independiente siguen pendientes; no se declara validación minera ni `READY_FOR_REVIEW`.
+- **Alcance de este documento:** conservar decisiones/respuestas literales y evidencias; cada implementación requiere su gate independiente.
+
+## Actualizacion incremental B09 — 2026-10-24
+
+La verificacion independiente de `data/raw/Topopl.csv` permite reclasificar B09 como `VERIFIED` para superposicion relativa con los sondajes en el sistema cartesiano local del proyecto. El origen oficial es reportado por el estudiante como entrega del docente; el archivo no se edito.
+
+- SHA-256: `1724a97f1fa6f6a059def896d1ba566b1e23d6f78781034bf2e3f53d2d4b1887`; 218,112 filas; campos `PID,X,Y,Z`; valores numericos finitos, cero nulos, cero PID duplicados y cero coordenadas XYZ duplicadas.
+- Extensiones: X `242090.504105–243287.725586`, Y `8195892.194946–8197095.651855`, Z `3120.858516–3596.0`. En la huella XY candidata `(242420–242980, 8196180–8196760)` hay 63,375 puntos con Z `3246–3554 m` (escala compatible con collar, no unidad declarada por Topopl).
+- En consultas XY sobre una cuadricula de 20 m dentro de esa huella (870 consultas), distancia al punto Topopl mas cercano: minimo `0.007 m`, mediana `1.725 m`, p95 `6.038 m`, maximo `17.427 m`. Es evidencia de cobertura muestreada, no una superficie interpolada por celda.
+- Comparacion independiente collar-superficie: IDW de los 8 puntos XY mas cercanos, ponderacion `1/d^2`, sin conversion de coordenadas. Para 35 collars, `z_collar - z_IDW8` = `-1.365 a +1.119 m`, mediana absoluta `0.308 m`; distancia XY al punto mas cercano, mediana `1.333 m`, maxima `5.348 m`. Corrobora compatibilidad relativa con el sistema local; no reproduce necesariamente el interpolador usado por el estudiante.
+- El CSV no declara unidades, CRS/EPSG ni datum. El diccionario e IMP-001 describen el collar en coordenadas cartesianas locales y metros, y el encaje espacial/elevaciones apoya la escala metrico-local; no se afirma CRS/datum oficial ni se aplica transformacion.
+- La cota superior de la malla candidata `3530 m` queda por debajo del maximo observado `3554 m` en la huella. Manteniendo origen Z `3050 m` y `dz=10 m`, la envolvente geometrica minima para contener ese maximo seria `zmax=3560 m`, `nz=51` y `28*29*51=41,412` bloques. Es una consecuencia aritmetica para reabrir P2, no una malla aprobada ni generada.
+
+**Reevaluacion:** `BASE_VERIFIED` pasa a SI para continuar el plan en el marco local, con las limitaciones de metadatos anteriores. B05 sigue `PARTIAL` por falta de baseline historico, sin borrar ni reconstruir esa historia. `P2_GRID` y `P3_TOPO` siguen pendientes: no se aprobaron nuevos parametros, no se interpolo la superficie, no se clasificaron bloques AIR/ROCK/PARTIAL y no se genero ningun producto P2-P6. La sintesis P0-P6 que decia `RECOVERY_BLOCKED` refleja el estado anterior a esta actualizacion.
+
+### P2 — extension vertical conceptual tras verificar B09
+
+**Alternativa elegida:** A, mantener z0=3050 m y dz=10 m y proponer nz=51 (`zmax=3560 m`), con 28×29×51 = 41.412 celdas.
+
+**Respuesta literal del estudiante:**
+
+> A. Uso 51 capas: zmax = 3560 m, 28 × 29 × 51 = 41,412 bloques.
+>
+> Dato real: el máximo observado de Topopl.csv dentro de la huella del grid es 3554 m, así que la capa superior (3550–3560 m) contiene la cota más alta. Además, la interpolación lineal o IDW calcula promedios ponderados de los puntos vecinos, por lo que la superficie interpolada nunca puede superar el máximo de los datos (3554 m): los 6 m de margen cubren cualquier superficie que se derive de estos puntos con esos métodos. Mantengo el origen Z = 3050 m y dz = 10 m, de modo que los índices k = 0–47 de las capas existentes no cambian.
+>
+> Ventaja: cubre toda la topografía observada con el menor incremento (+2,436 celdas frente a las 48 capas). Una capa 52 (3560–3570 m) quedaría completamente por encima de la superficie, es decir, 812 celdas AIR sin información útil.
+>
+> Limitación: si se adoptara un método de superficie que pueda superar el máximo de los datos (por ejemplo, kriging o splines con sobreoscilación), o si la topografía oficial se actualiza con cotas más altas, habría que agregar una capa. El volumen total sigue siendo nominal (41,412 × 4,000 m³), no de roca: la capa superior será mayoritariamente AIR o PARTIAL, y eso se decide en P3.
+
+**Evaluación conversacional:** PARCIAL — H1. La aritmética de 51 capas es correcta: k=0–50, capa superior 3550–3560 m; el incremento frente a nz=48 es 2.436 bloques y conserva las elevaciones de las capas inferiores. Para interpolación lineal o IDW con pesos no negativos que suman uno, la estimación queda dentro del rango de los puntos usados. Pero 3554 m es el máximo medido dentro de la huella rectangular, no necesariamente de todos los puntos que usaría el interpolador: hay cotas Topopl de hasta 3596 m fuera de esa huella. La cota de 3554 solo garantiza el límite si P3 restringe las entradas al conjunto dentro de la huella (o valida el máximo local de los vecindarios usados). Por eso, que las 812 celdas de k=51 sean AIR también es condicional, no resultado verificado. La elección queda como candidata conceptual; P2_GRID y P3_TOPO siguen sin aprobación, y no se generó malla.
+
+### P2 — dominio horizontal para P3 y gate P2_GRID
+
+**Alternativa elegida:** A, limitar los datos de interpolación a la huella del grid más una franja de 20 m: X `242400–243000`, Y `8196160–8196780`.
+
+**Respuesta literal del estudiante:**
+
+> A. Restrinjo la interpolación de P3 a los puntos de Topopl.csv dentro de la huella del grid más una franja de 20 m (una celda) alrededor, es decir X 242400–243000 e Y 8196160–8196780.
+>
+> Dato real: lo comprobé con el archivo. Solo dentro de la huella hay 63,375 puntos con Z máximo 3554 m; con la franja de 20 m hay 73,309 puntos y con 40 m, 83,317, y en ambos casos el máximo sigue siendo 3554 m. Las cotas mayores (hasta 3596 m) están más lejos de la malla. Por lo tanto, con interpolación lineal o IDW (pesos no negativos y normalizados) sobre ese dominio, la superficie no puede superar 3554 m, y las 51 capas (zmax = 3560 m, 41,412 bloques) son suficientes.
+>
+> Ventaja: la franja de 20 m resuelve la cobertura en los bordes, porque los bloques periféricos tienen puntos topográficos a ambos lados, sin introducir cotas de zonas lejanas. Evita las 3,248 celdas adicionales de la opción B (55 capas), que dentro de la huella serían aire.
+>
+> Limitación: la condición de 3554 m depende de mantener ese dominio y un método que no extrapole por encima de los datos. Si P3 adopta otro método o amplía el dominio, habrá que recalcular el máximo y revisar nz. La franja de 20 m es un criterio práctico (una celda), no un margen validado.
+
+**Verificación y evaluación:** se reprodujeron los conteos leyendo `Topopl.csv`: huella `(242420–242980, 8196180–8196760)`, 63.375 puntos, máximo Z=3554 m; buffer de 20 m con límites indicados, 73.309 puntos, máximo 3554 m; buffer de 40 m, 83.317 puntos, máximo 3554 m. La respuesta es **PARCIAL — H1**: conteos, límites y condición matemática de interpolación convexa son correctos. El conteo y máximo no prueban que cada borde tenga puntos “a ambos lados” ni que la cobertura interpolada sea completa; P3 deberá medir cobertura/distancias en la franja y definir tratamiento de huecos/bordes. El dominio de interpolación queda como decisión conceptual; aún no se interpoló Topopl ni se aprobó P3.
+
+**Gate propuesto — `P2_GRID` (no aprobado todavía):**
+
+- **Inputs:** parámetros geométricos seleccionados y documentados, envolvente de trayectorias XYZ verificada, y `Topopl.csv` solo como evidencia para el límite superior; no interpolar ni modificar fuentes. Geometría candidata: ejes X/Y/Z sin rotación y Z positivo; `origin=(242420, 8196180, 3050) m`; `dx=20, dy=20, dz=10 m`; `nx=28, ny=29, nz=51`; límites `[242420,242980] × [8196180,8196760] × [3050,3560] m`; 41.412 celdas.
+- **Salida:** `data/processed/m01b_block_grid.csv`, una fila por celda con `block_id,i,j,k,x,y,z,dx,dy,dz,volume_nominal`; sin `topo_status`, dominio litológico ni leyes. Índices base cero e ID `i + j*nx + k*nx*ny`; centros `origin + (índice+0.5)*tamaño`; volumen nominal 4.000 m³ por bloque, condicionado a que las unidades locales sean metros. La tabla es geometría nominal, no volumen neto de roca.
+- **Implementación autorizada solo tras aprobación de una opción abajo:** `src/m01/block_model.py`; pruebas nuevas `tests/m01/test_block_model.py`; salida generada anterior; actualización incremental de IMP-002, PLAN y EVIDENCE. Mantener `data/raw/Topopl.csv` intacto y sin stage/commit.
+- **Pruebas de aceptación:** 41.412 `block_id` únicos y contiguos de 0 a 41.411; índices cubren rangos y satisfacen la fórmula de ID; centros corresponden a origen/índices/dimensiones; 4.000 m³ nominales, dimensiones positivas y orden estable; las 270 estaciones de trayectoria quedan dentro de la envolvente; regeneración idéntica con iguales parámetros/entradas; casos límite de índices y dimensiones inválidas. No añadir clasificación topográfica a P2.
+- **Validación minera/alcance:** contrastar en solo lectura que la envolvente contiene las trayectorias y la cota puntual de 3554 m dentro del dominio seleccionado; registrar que la suficiencia del límite superior depende del dominio/método de P3, que CRS/datum no están documentados y que nominal volume no es volumen de roca. No declarar `MINING_VALIDATED`; P3 mantiene su gate independiente.
+- **Dependencias:** B03/B08 y la geometría conceptual de P2; B09 verificado para superposición local con límites documentados; P3 decide interpolación/cobertura antes de AIR/ROCK. No se instala ninguna dependencia.
+
+**Estamos listos para codificar esta etapa** solo si confirmas explícitamente uno de estos alcances:
+
+- **A.** Apruebo el alcance `P2_GRID` descrito y sus parámetros/archivos.
+- **B.** No; revisar la decisión o el alcance antes de implementar.
+- **C.** Revisar primero las pruebas y validaciones de aceptación.
+
+La aprobación de A autoriza únicamente la geometría P2 descrita; no autoriza interpolación/clasificación P3, asignación P4, commit ni push.
+
+**Registro de gate y ejecución P2_GRID (2026-10-24):** el estudiante aprobó A con los parámetros y archivos especificados. Se implementó únicamente la geometría autorizada en `src/m01/block_model.py`, se añadieron pruebas en `tests/m01/test_block_model.py` y se generó `data/processed/m01b_block_grid.csv`. Comando exacto desde la raíz del repositorio:
+
+```powershell
+& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m src.m01.block_model
+```
+
+Resultado: `blocks_written=41412`, exit code 0. La lectura independiente de salida encontró 41.412 filas; 41.412 IDs únicos y contiguos `0..41411`; dimensiones únicas `20×20×10`; volumen nominal único `4000`; bloque 0 en `(242430,8196190,3055)` y bloque 41411 en `(242970,8196750,3555)`. Las 270 estaciones de trayectoria quedaron dentro de los límites aprobados. Hash SHA-256 del CSV generado: `7c458acd98e3c60e09689c063f1a662d317b999fee2542f49fc32b6d2f76e5b6`.
+
+Pruebas específicas: `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m unittest tests.m01.test_block_model -v` — 7 PASS, exit code 0. Suite completa: `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m unittest discover -s tests -v` — 54 PASS, exit code 0. Se verificó reproducción byte por byte de dos serializaciones del mismo grid. P2 queda implementado y computacionalmente probado para el alcance aprobado; no es validación minera. No se modificó `data/raw/`, `main.py` ni gobernanza; Topopl conserva el hash registrado. P3/P4 no se implementaron ni autorizaron, y no hubo commit/push.
+
+**Interpretación del estudiante y precisión del esquema:** el estudiante verificó independientemente 41.412 filas, IDs únicos 0–41.411 con `block_id=i+j·28+k·28·29`, centros por origen + (índice + 0.5)·tamaño, volumen nominal 4.000 m³, ausencia de nulos e índices duplicados y `k_max=50`. Interpreta el resultado como consistente con parámetros aprobados y explícitamente separa esta comprobación computacional de la validación minera, aún pendiente por la clasificación aire/roca de P3. También observó que `x,y,z` son coordenadas del centro. Se documentará esa semántica en IMP-002; no se renombra el CSV, pues el esquema fue aprobado y un cambio de nombres requeriría autorización y compatibilidad adicionales.
+
+**Respuesta literal del estudiante:**
+
+> Interpreto el resultado de P2_GRID como consistente con los parámetros aprobados: verifiqué de forma independiente data/processed/m01b_block_grid.csv y tiene 41,412 filas, block_id únicos 0–41411 que cumplen block_id = i + j·28 + k·28·29, centros iguales a origen + (índice + 0.5)·tamaño en X, Y y Z, volumen nominal de 4,000 m³ en todas las celdas, sin nulos ni índices duplicados, y k máximo 50. Esto es validación computacional de la geometría, no validación minera: el grid todavía no distingue aire de roca y su extensión vertical depende de la regla topográfica de P3.
+>
+> Observación: las columnas x, y, z representan el centro de cada bloque. Para que no se confundan con una esquina, propongo documentarlo explícitamente en IMP-002 (o renombrarlas a center_x/center_y/center_z en una etapa posterior autorizada).
+>
+> Pasemos a P3 (topografía y clasificación aire/roca).
+
+P2 queda **computacionalmente verificado por el estudiante**, sin `MINING_VALIDATED`. P3 se inicia solo conceptualmente; este mensaje no autoriza implementar interpolación, clasificación topográfica ni cambiar el CSV.
+
+### P3.1 — representación de la superficie topográfica (conceptual)
+
+**Microteoría:** `Topopl.csv` es una nube de puntos XYZ irregular, no una malla raster/DEM regular. Para evaluar `z_topo(x,y)` en posiciones sin punto coincidente hay que elegir un interpolador y definir su soporte espacial y comportamiento en bordes/huecos. Interpolación lineal en triángulos utiliza vecinos locales pero puede dejar huecos fuera de la triangulación; IDW produce promedios controlados por pesos y parámetros de vecindad, pero puede suavizar crestas y valles; vecino más cercano es simple y no extrapola elevación con continuidad, aunque crea zonas escalonadas. Ningún método queda validado por la mera cercanía de puntos.
+
+**Evidencia y faltantes:** `Topopl.csv` tiene 218.112 puntos `PID,X,Y,Z`, es irregular y no declara unidad, CRS/EPSG ni datum. Los controles previos hallaron 73.309 puntos dentro de la huella del grid más 20 m y Z máximo 3554 m; con 40 m, 83.317 puntos y el mismo máximo. La distancia al punto más cercano en una cuadrícula de comprobación de 20 m dentro de la huella fue hasta 17,427 m. Eso no acredita cobertura en cada punto/celda ni demuestra que toda arista de borde tenga puntos a ambos lados. El plan anterior eligió conceptualmente el rectángulo de 20 m como dominio de entrada, pero esa elección aún no es una validación de cobertura ni una autorización de código.
+
+**Pregunta principal:** ¿qué método conceptual defenderías para calcular `z_topo(x,y)` dentro de ese dominio, y cómo tratarías ubicaciones sin soporte suficiente?
+
+- **A. IDW local:** promediar vecinos con pesos inversos a distancia; hay que justificar `k`/radio y controlar el suavizado y bordes. No sobrepasa el rango de sus vecinos si los pesos son positivos y normalizados.
+- **B. Interpolación lineal triangulada:** usar triángulos entre puntos cercanos; respeta variación local sin fijar una potencia IDW, pero el resultado depende de la triangulación y puede haber ubicaciones fuera de cobertura/huecos que deben quedar explícitos.
+- **C. Vecino más cercano:** asignar la Z del punto más cercano; es determinista y no inventa elevaciones entre valores medidos, pero genera una superficie escalonada y sensible a densidad desigual.
+- **D. No interpolar aún:** solicitar o producir una superficie oficial regular/triangulada con metadatos, manteniendo `TOPO_UNKNOWN` hasta tenerla; reduce decisiones ad hoc, pero bloquea clasificación P3 temporalmente.
+
+Justifica tu elección con un dato real, una ventaja y una limitación. No pases todavía a código: el gate `P3_TOPO` será independiente.
+
+**Respuesta del estudiante — P3.1:**
+
+> A. IDW local con los 8 puntos más cercanos y potencia 2, usando solo los puntos de Topopl.csv dentro de la huella del grid más la franja de 20 m (73,309 puntos, decisión anterior).
+>
+> Dato real: en tu verificación de B09, un IDW con 8 vecinos reprodujo la cota de los 35 collars con diferencias entre −1.365 y +1.119 m (mediana absoluta 0.308 m), y en 870 ubicaciones separadas 20 m la distancia mediana al punto topográfico más cercano es 1.725 m. Con puntos tan densos, los 8 vecinos están a pocos metros y el suavizado del IDW es pequeño frente a dz = 10 m. Además, los pesos son no negativos y normalizados, así que la superficie no puede superar el máximo de 3554 m del dominio, coherente con las 51 capas de P2.
+>
+> Ventaja: es simple, determinista y fácil de probar (un punto que coincide con un dato devuelve su cota; un plano inclinado sintético se reproduce dentro de una tolerancia). Se puede implementar solo con numpy, que ya está en el .venv, sin instalar dependencias (scipy no está instalado).
+>
+> Limitación: k = 8 y potencia 2 son parámetros heurísticos, no validados. El IDW suaviza crestas y quebradas y, como los datos parecen curvas de nivel cada 1 m, puede producir pequeños escalones entre curvas. Donde el punto más cercano esté lejos (el máximo observado fue 17.427 m) la cota es menos confiable, por lo que propongo registrar la distancia al vecino más cercano y marcar como OUTSIDE_TOPO_COVERAGE o de baja confianza las ubicaciones que superen un umbral que se defina en P3.
+
+**Verificación y evaluación:** el dato anterior de IDW8 en los 35 collars se conserva como control independiente; no demuestra por sí solo adecuación minera ni valida el método. Se recalcularon distancias al soporte usando los 73.309 puntos del dominio rectangular de 20 m y los 812 centros XY distintos de las columnas del grid: vecino más cercano min `0.007 m`, mediana `1.820 m`, p95 `6.038 m`, máximo `13.140 m`; octavo vecino mediana `6.396 m`, p95 `12.799 m`, máximo `21.313 m`. En la cuadrícula independiente de 870 consultas, la distancia al octavo vecino alcanza `21.184 m`, no solo “pocos metros”. Evaluación **PARCIAL — H1**: IDW8 con potencia 2 es reproducible y su propiedad de rango es correcta sobre el dominio fijado, pero la densidad del vecino más cercano no prueba que los ocho vecinos estén todos próximos ni que el suavizado sea pequeño frente a dz. `k=8` y potencia 2 siguen heurísticos; falta un umbral y una política explícita para ubicaciones de soporte distante. No se generó superficie ni se implementó código.
+
+### P3.2 — política de soporte/cobertura para IDW (conceptual)
+
+**Microteoría:** calcular IDW en toda coordenada produce un valor incluso cuando los vecinos están lejos; eso es extrapolación operativa, aunque el algoritmo solo promedie datos. Debe separarse la cota interpolada de la confianza/estado de cobertura. Un umbral estricto reduce asignaciones débiles pero aumenta `TOPO_UNKNOWN/OUTSIDE_TOPO_COVERAGE`; sin umbral se conserva una cota en todo el dominio, pero se puede aparentar cobertura donde no existe soporte. El umbral no se deduce automáticamente del tamaño de celda y necesita justificación y revisión espacial.
+
+**Evidencia/faltantes:** para los 812 centros XY de columnas del grid, dentro del dominio de 20 m, las distancias al punto más cercano son mediana `1.820 m`, p95 `6.038 m`, máximo `13.140 m`; las distancias al octavo vecino son mediana `6.396 m`, p95 `12.799 m`, máximo `21.313 m`. Son métricas de centros XY, no una evaluación de vértices, toda la celda o una superficie calculada. El máximo `17.427 m` de la auditoría previa corresponde a otra cuadrícula de consultas y no debe usarse como máximo universal. Sigue sin haber umbral aprobado.
+
+**Pregunta principal:** ¿qué regla usarías cuando la distancia al soporte IDW exceda el criterio de cobertura?
+
+- **A. Umbral 10 m:** dejar `TOPO_UNKNOWN` si el vecino más cercano supera una celda vertical (`dz=10 m`); es conservador y verificable, pero puede excluir centros aun con varios vecinos cercanos.
+- **B. Umbral 20 m:** usar una celda horizontal como distancia máxima; admite más superficie, pero puede aceptar consultas con octavo vecino más lejano y relieve menos controlado.
+- **C. Sin corte duro:** calcular IDW en todos los centros y guardar distancia/flag de baja confianza; mantiene continuidad numérica, pero requiere que la visualización/consumo nunca confunda baja confianza con cobertura verificada.
+- **D. Umbral basado en validación:** elegirlo después de una prueba de retención espacial de puntos y análisis de errores, con regla previa de aceptación; es más sustentable, pero añade trabajo y hasta entonces no fija cobertura.
+
+Elige A/B/C/D y justifica con un dato real, una ventaja y una limitación. Esta decisión sigue siendo conceptual; no implementa IDW ni clasifica bloques.
+
+**Respuesta del estudiante — P3.2:**
+
+> B. Uso un umbral de 20 m (una celda horizontal) sobre la distancia al vecino más cercano: si supera 20 m, la ubicación queda TOPO_UNKNOWN / OUTSIDE_TOPO_COVERAGE; si no, se calcula IDW (k = 8, potencia 2). Además, como en la opción C, guardo para cada consulta la distancia al vecino más cercano y al octavo vecino, para que la incertidumbre quede visible en P4–P6.
+>
+> Dato real: en tu verificación de B09, la distancia al punto topográfico más cercano en 870 ubicaciones separadas 20 m tuvo mediana 1.725 m y máximo 17.427 m; en los 812 centros del grid el octavo vecino tiene mediana 6.396 m, p95 12.799 m y máximo 21.313 m. Con 20 m, el corte no elimina zonas con buena densidad de puntos, pero sí detectaría un hueco real de información. Es coherente con la franja de 20 m elegida para el dominio de datos y con el tamaño de celda de P2.
+>
+> Ventaja: el criterio es simple, reproducible y fácil de probar (un punto de consulta a 19 m del dato más cercano se interpola; uno a 21 m queda TOPO_UNKNOWN), y guardar las distancias permite identificar después las cotas con soporte más débil sin descartarlas.
+>
+> Limitación: 20 m es un criterio práctico ligado a la geometría de la celda, no un umbral validado con errores reales. Una cota con el vecino más cercano a 15–17 m puede tener un error vertical mayor en zonas de pendiente fuerte; para validarlo haría falta la opción D (retener puntos y medir errores), que dejo como control para P5.
+
+**Verificación y evaluación:** **PARCIAL — H1**. Los valores citados de la cuadrícula anterior y la distancia del octavo vecino están documentados. Para los 812 centros XY de columnas de la malla, se midió distancia al vecino más cercano min `0.007 m`, mediana `1.820 m`, p95 `6.038 m`, máximo `13.140 m`, y al octavo vecino máximo `21.313 m`. Así, el umbral propuesto de 20 m no excluiría ninguno de esos 812 centros en esta medición; no demuestra que detecte un hueco real de soporte en los centros actuales. El octavo vecino puede superar 20 m aun cuando el primero quede bajo el umbral, por lo que se debe conservar esa distancia como diagnóstico distinto y no tratar el criterio nearest-neighbor como garantía de estabilidad del IDW. El umbral de 20 m es una regla práctica, no validada con errores verticales; la prueba de retención propuesta para P5 es pertinente.
+
+Precisión semántica pendiente: `OUTSIDE_TOPO_COVERAGE` debe reservarse para consultas fuera del dominio de topografía declarado (rectángulo de entrada y política de borde); `TOPO_UNKNOWN` debe representar consulta dentro del dominio sin soporte que cumpla el umbral. No usarlos como etiquetas intercambiables. No hay IDW calculado ni bloques clasificados.
+
+### P3.3 — regla espacial de clase topográfica por bloque (conceptual)
+
+**Microteoría:** la clase del centro es barata, pero no identifica si la superficie corta el bloque; una celda PARTIAL puede tener centro AIR o ROCK según su forma. Evaluar superficie en las cuatro esquinas XY permite aproximar si la interfaz cruza la celda, aunque no calcula una fracción exacta y supone que las consultas de esquina tienen soporte. Una fracción de ocupación requiere subdivisión o integración geométrica, parámetros de muestreo y criterios de aceptación aparte. La clase topográfica no es una asignación litológica ni convierte el volumen nominal en volumen neto de roca.
+
+**Evidencia/faltantes:** el grid aprobado tiene 28×29 columnas de 20×20 m y 51 capas de 10 m; la superficie sería evaluada desde Topopl irregular mediante IDW8/potencia 2, con umbral nearest de 20 m conceptualmente propuesto. Aún no hay superficie, umbral validado ni clasificación. Los cuatro vértices XY de cada columna se repiten por capa vertical, pero el tratamiento de celdas cuya consulta de vértice cae fuera de soporte debe seguir la distinción `OUTSIDE_TOPO_COVERAGE`/`TOPO_UNKNOWN`. La regla de centros, vértices o fracción no se ha elegido.
+
+**Pregunta principal:** ¿cómo clasificarías cada celda respecto a la superficie para producir `AIR`, `ROCK`, `PARTIAL` o un estado desconocido?
+
+- **A. Centro de celda:** comparar `z_center` con `z_topo(x_center,y_center)`; sencillo y económico, pero los bloques cortados por la superficie se reducen a AIR o ROCK.
+- **B. Cuatro vértices XY de la celda:** comparar la elevación de superficie en cada esquina con el intervalo vertical del bloque; asignar AIR/ROCK si las cuatro esquinas quedan del mismo lado y PARTIAL si la superficie cruza; representa mejor cortes, pero no es fracción de roca ni detecta necesariamente toda curvatura entre esquinas.
+- **C. Fracción por submuestreo:** evaluar múltiples puntos por celda y guardar una fracción estimada de ocupación; da más información volumétrica, pero depende de resolución de muestreo/umbral y requiere más pruebas.
+- **D. Mantener topografía como atributos sin clases aún:** guardar cotas/distancias de consulta y posponer AIR/ROCK/PARTIAL hasta validar superficie y regla; evita una clasificación prematura, pero no habilita todavía el filtrado geológico por estado topográfico.
+
+Elige A/B/C/D y justifica con evidencia real, una ventaja y una limitación. Sigue siendo decisión conceptual; el gate `P3_TOPO` para implementar interpolación y clasificación no se ha abierto ni aprobado.
+
+**Respuesta del estudiante — P3.3:**
+
+> B. Cuatro vértices XY. Para cada columna (i, j) calculo z_topo con IDW en sus 4 esquinas, que se comparten entre columnas vecinas (29 × 30 = 870 puntos). Para cada bloque con base z_inf y techo z_sup:
+> - ROCK si z_sup ≤ mínimo de las 4 cotas (todo el bloque queda bajo la superficie);
+> - AIR si z_inf ≥ máximo de las 4 cotas (todo el bloque queda sobre la superficie);
+> - PARTIAL en cualquier otro caso (la superficie cruza el bloque);
+> - TOPO_UNKNOWN si alguna esquina no tiene soporte (vecino más cercano > 20 m) y OUTSIDE_TOPO_COVERAGE si está fuera del dominio.
+>
+> Dato real: las 870 esquinas coinciden con la malla de 870 ubicaciones cada 20 m que verificaste en B09, donde la distancia al vecino más cercano tuvo mediana 1.725 m y máximo 17.427 m, por lo que con el umbral de 20 m todas las esquinas tendrían soporte. Es coherente con P4.8 y P4.9: solo ROCK recibe litología y PARTIAL queda UNASSIGNED / PARTIAL_TOPO, así que no necesito la fracción de roca, solo detectar con seguridad qué bloques corta la superficie.
+>
+> Ventaja: detecta los bloques cortados que el método del centro clasificaría mal como AIR o ROCK, con una regla simple y reproducible que se prueba con superficies sintéticas (plano horizontal, plano inclinado, superficie que cruza exactamente un borde de bloque). Usando el mínimo y el máximo de las esquinas, un bloque solo es ROCK si toda su cara superior está bajo la superficie en las 4 esquinas.
+>
+> Limitación: no calcula la fracción de roca ni el volumen neto, y puede no detectar una cresta o quebrada que suba o baje entre las esquinas (curvatura dentro de los 20 m). En ese caso, un bloque PARTIAL podría quedar como AIR o ROCK. Además, los bloques PARTIAL quedarán sin litología, lo que deja una capa sin asignar en la superficie.
+
+**Verificación y evaluación:** se verificaron las 870 coordenadas de esquina: x `242420–242980`, y `8196180–8196760`, compatibles con los 29×30 nodos de la geometría aprobada. Limitando fuentes a los 73.309 puntos del dominio aprobado, distancia al punto más cercano: mínimo `0.007 m`, mediana `1.725 m`, p95 `6.038 m`, máximo `17.427 m`; cero esquinas superan 20 m. Evaluación **PARCIAL — H1**. Conteos, esquema y condición de soporte en las esquinas son correctos para el criterio propuesto. Sin embargo, IDW8 no es una superficie bilineal ni necesariamente extrema en esquinas: la comparación de cuatro vértices no demuestra matemáticamente que la superficie no alcance un extremo interior, por lo que AIR/ROCK/PARTIAL es una aproximación condicionada al muestreo en vértices. Los casos sintéticos que propone son pertinentes, pero no constituyen validación minera; habrá que probar sensibilidad en puntos interiores o declarar esa limitación en P5. La clase PARTIAL no implica fracción volumétrica; su volumen neto de roca queda UNKNOWN. No se calcularon cotas IDW ni estados de bloques.
+
+### P3.4 — agregación de soporte por vértice a estado de bloque (conceptual)
+
+**Microteoría:** cada esquina puede tener estado de consulta distinto: dentro de dominio y con soporte, dentro pero por encima del umbral (`TOPO_UNKNOWN`), o fuera del dominio (`OUTSIDE_TOPO_COVERAGE`). Un bloque usa cuatro consultas; para producir un único estado de bloque hace falta una regla de prioridad. Marcar todo el bloque desconocido al primer vértice sin soporte evita inferir una clase física incompleta, mientras guardar estados y distancias por vértice conserva el diagnóstico espacial. El orden entre “fuera del dominio” y “soporte bajo dentro” determina qué causa se muestra cuando ambas aparecen en una misma celda.
+
+**Evidencia/faltantes:** en la comprobación actual las 870 esquinas están dentro del rectángulo de 20 m y las 870 pasan nearest-distance ≤20 m; así que ninguna de las opciones de prioridad alteraría las consultas actuales. Sin embargo, la regla debe cubrir cambios futuros de dominio, puntos faltantes y celdas en el borde. No hay aún esquema de salida topográfica ni clasificación producida.
+
+**Pregunta principal:** ¿cómo agregarías estados de las cuatro esquinas para formar el estado topográfico de un bloque si hay causas mixtas?
+
+- **A. Prioridad de cobertura exterior:** si alguna esquina está fuera del dominio, bloque `OUTSIDE_TOPO_COVERAGE`; si ninguna está fuera pero alguna supera 20 m, `TOPO_UNKNOWN`; clasificar AIR/ROCK/PARTIAL solo con cuatro cotas válidas. Conservador, pero una única esquina exterior domina.
+- **B. Prioridad de soporte desconocido:** si alguna consulta dentro del dominio supera 20 m, `TOPO_UNKNOWN`; usar `OUTSIDE_TOPO_COVERAGE` solo si las cuatro esquinas están fuera. Conserva UNKNOWN como causa de soporte, pero oculta cobertura parcial de borde.
+- **C. Estado por esquina y estado bloque mixto:** guardar las cuatro causas/distancias; si no todas las esquinas son válidas, el bloque `TOPO_UNKNOWN` con una causa agregada (o lista), manteniendo `OUTSIDE_TOPO_COVERAGE` como flag cuando corresponda. Más trazable, pero requiere contrato/visualizador para códigos de causa múltiples.
+- **D. No agregar causas:** dejar la clasificación del bloque sin estado hasta que todas las cuatro esquinas sean válidas; conservar diagnósticos únicamente por vértice. Reduce decisiones de precedencia, pero posterga una tabla de bloques simple.
+
+Elige A/B/C/D y justifica con un dato real, una ventaja y una limitación. P3 sigue conceptual; la pregunta no autoriza código.
+
+**Respuesta del estudiante — P3.4:**
+
+> A. Consolido así: si alguna esquina está fuera del dominio topográfico, el bloque es OUTSIDE_TOPO_COVERAGE; si ninguna está fuera pero alguna supera 20 m al vecino más cercano, el bloque es TOPO_UNKNOWN; solo con las cuatro cotas válidas aplico la regla ROCK / AIR / PARTIAL. Además guardo por bloque la distancia máxima al vecino más cercano entre sus cuatro esquinas, como diagnóstico.
+>
+> Evidencia real: en las 870 esquinas actuales ninguna está fuera del dominio (huella + 20 m) y ninguna supera el umbral (vecino más cercano: mediana 1.725 m, máximo 17.427 m), así que con los datos actuales esta regla no cambia ningún bloque: todos se clasificarían con cuatro cotas válidas. La regla solo define el comportamiento ante una cobertura incompleta futura o en otra topografía.
+>
+> Ventaja: es simple, determinista y fácil de probar (un caso con una esquina fuera, uno con una esquina a más de 20 m y uno con las cuatro válidas). Es conservadora y coherente con P4.8: un bloque solo puede llegar a ROCK, y por lo tanto recibir litología, si sus cuatro esquinas tienen cota con soporte.
+>
+> Limitación: una sola esquina mala domina el estado del bloque, aunque las otras tres sean válidas, y si hubiera causas mixtas solo se guarda la de mayor prioridad. Con la cobertura actual ese caso no ocurre, pero si apareciera habría que revisar la regla con la opción C.
+
+**Verificación y evaluación:** **CORRECTA — H0** como regla de consolidación conceptual. En las 870 esquinas de la malla, dentro del rectángulo Topopl aprobado, la distancia al vecino más cercano tiene mediana `1.725 m`, máximo `17.427 m` y cero valores `>20 m`; todas quedan dentro del dominio. La prioridad determinista propuesta es `OUTSIDE_TOPO_COVERAGE` > `TOPO_UNKNOWN` > clasificación `ROCK/AIR/PARTIAL`, y se preserva la distancia máxima nearest-neighbor por bloque. La condición “todos se clasificarían con cuatro cotas válidas” significa que todos serían elegibles para la regla geométrica; no implica que todos terminen siendo ROCK/AIR/PARTIAL ni anticipa conteos de clases, que aún no se calcularon. El estado PARTIAL no incluye fracción de roca. La limitación de una sola esquina dominando el bloque está correctamente identificada.
+
+### Gate de implementación `P3_TOPO` — aprobado y ejecutado
+
+**Estamos listos para codificar esta etapa** únicamente si se aprueba explícitamente el siguiente alcance:
+
+- **Inputs inmutables:** `data/raw/Topopl.csv` y `data/processed/m01b_block_grid.csv`; no alterar ninguno. Usar solamente puntos Topopl dentro del rectángulo cerrado X `242400–243000`, Y `8196160–8196780`. El grid P2 define 41.412 celdas y 870 vértices XY compartidos.
+- **Decisiones P3 aprobadas conceptualmente:** IDW `k=8`, potencia `p=2`, pesos `1/d²` normalizados; coincidencia exacta con punto fuente devuelve su Z directamente; consulta fuera del rectángulo = `OUTSIDE_TOPO_COVERAGE`; consulta dentro pero distancia al vecino más cercano `>20 m` = `TOPO_UNKNOWN`; umbral inclusivo `<=20 m` válido. Guardar distancia al vecino 1 y al vecino 8.
+- **Regla por bloque (solo con cuatro consultas válidas):** con `z_inf`/`z_sup` de P2 y mínimo/máximo de las cuatro cotas IDW, `ROCK` si `z_sup <= min(z_topo)`, `AIR` si `z_inf >= max(z_topo)`, en otro caso `PARTIAL`. Si hay causas de consulta mixtas, prioridad agregada: alguna esquina fuera del dominio → `OUTSIDE_TOPO_COVERAGE`; en caso contrario alguna consulta `>20 m` → `TOPO_UNKNOWN`. Guardar `max_nearest_distance_m` por bloque. No calcular fracción de roca ni cambiar `volume_nominal`.
+- **Archivos propuestos:** módulo `src/m01/topography.py`; pruebas `tests/m01/test_topography.py`; salida compartida de consultas `data/processed/m01b_topography_vertices.csv` (870 filas, coordenada, elevación IDW, distancias nearest/8th y estado/causa); salida de estados `data/processed/m01b_block_topography.csv` (41.412 filas, block_id, topo_status, causa agregada y distancia máxima al vecino más cercano). Mantener intactos `m01b_block_grid.csv` y `Topopl.csv`; no sobrecargar el grid geométrico con clasificación P3.
+- **Pruebas computacionales:** IDW devuelve Z exacta en coincidencia; conserva rango de los vecinos con pesos normalizados; prueba determinista; plano horizontal sintético clasifica ROCK/AIR/PARTIAL en ambos lados y cruce; fixtures de estado con una esquina fuera, una esquina `>20 m` y cuatro válidas; prioridad OUTSIDE sobre TOPO_UNKNOWN; distancia exactamente 20 m es válida y apenas mayor no; cuatro vértices se deduplican y comparten consultas; esquema y recuentos de salidas; los dos artefactos se regeneran idénticamente. En los datos reales: 870 vértices únicos, 41.412 block_id cubiertos una vez, ninguno de los 870 nearest distances supera 20 m, todos los estados respetan su causa. No fijar conteos de AIR/ROCK/PARTIAL como expectativa hasta ejecutar el cálculo.
+- **Validación técnica/minera:** comparar los resultados IDW en 35 collars con la auditoría ya registrada (sin tratarla como validación independiente si se reutilizan esos datos como ajuste); además, propuesta de holdout espacial para P5 para estimar error vertical fuera de muestra, inspección de distancia nearest y 8th, mapas/secciones de estados y revisión específica de bordes, celdas PARTIAL y posibles extremos entre vértices. La regla de vértices puede omitir curvatura/crestas entre esquinas; reportar clases como aproximación, no fracción/volumen de roca, y no declarar `MINING_VALIDATED`.
+- **Dependencias/alcance:** P2_GRID generado y probado; B09 verificado para uso relativo local, con unidad/CRS/datum aún no declarados. Solo NumPy/Python ya disponibles; no instalar paquetes. No incluye P4, visualizador P6, renombre de columnas `x/y/z`, cambio de grid, otras fuentes, commit ni push.
+
+**Opciones de aprobación:**
+
+- **A.** Sí, apruebo exactamente el alcance, reglas, archivos y pruebas del gate `P3_TOPO`.
+- **B.** No; revisemos el método, regla, salida o alcance antes de implementar.
+- **C.** Revisemos primero las pruebas/validaciones o el diseño de holdout.
+
+La aprobación A autoriza únicamente P3 conforme a este gate; no autoriza P4 ni P6.
+
+### Implementación y resultados P3_TOPO — 2026-10-24
+
+El estudiante aprobó A expresamente. Se implementó `src/m01/topography.py`, con pruebas en `tests/m01/test_topography.py`, y se generaron las dos salidas aprobadas; `data/raw/Topopl.csv` y `data/processed/m01b_block_grid.csv` se leyeron sin modificarlos.
+
+**Comando exacto desde la raíz del repositorio:**
+
+```powershell
+& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m src.m01.topography
+```
+
+Salida real: `vertices_written=870`, `blocks_written=41412`, `topography_source_points=73309`; exit code 0. Conteos por estado en `m01b_block_topography.csv`: `ROCK=25732`, `AIR=13770`, `PARTIAL=1910`, `TOPO_UNKNOWN=0`, `OUTSIDE_TOPO_COVERAGE=0`. Rango de `z_topo` en los 870 vértices: `3245.600835–3554.000000 m`. Los 35 collars recibieron estimación válida IDW8; `z_collar - z_surface`: mínimo `-1.365264 m`, máximo `+1.118721 m`, mediana absoluta `0.308264 m`. Es el control de collars reutilizado previamente para seleccionar/inspeccionar la regla; no es un holdout independiente ni validación fuera de muestra.
+
+**Pruebas:** `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m unittest tests.m01.test_topography -v` — 10 PASS, exit code 0. Incluyen coincidencia exacta con dato, IDW en plano inclinado, rango y repetibilidad; plano horizontal con AIR/ROCK/PARTIAL y superficies coincidentes con techo/base; dominio exterior, umbral de 20 m inclusivo y apenas superior, agregación/prioridad de estados, integración con topografía/grid reales y serialización reproducible byte a byte de ambas tablas. Suite completa `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m unittest discover -s tests -v` — 64 PASS, exit code 0.
+
+SHA-256 de `m01b_topography_vertices.csv`: `9275729217ea792cd51dffbbece511a196da0edc2acbebb17596f63a9b2c38ae`; de `m01b_block_topography.csv`: `66b54da3243a37644bd581e096149ca1738e05542d9968aa6fa3679e16866d30`. Se repitió el comando de generación; ambos hashes permanecieron idénticos. El hash de Topopl sigue `1724a97f1fa6f6a059def896d1ba566b1e23d6f78781034bf2e3f53d2d4b1887`; el del grid P2 sigue `7c458acd98e3c60e09689c063f1a662d317b999fee2542f49fc32b6d2f76e5b6`.
+
+**Límite e interpretación pendiente:** las clases son las definidas por cuatro vértices; no representan fracción ni volumen neto de roca y pueden no detectar relieve interior entre esquinas. La concordancia de collars reutiliza puntos disponibles y no prueba exactitud minera; umbral 20 m y parámetros IDW no tienen validación independiente de error vertical. No se declara `MINING_VALIDATED`. El estudiante debe interpretar los conteos, cotas y diferencias, y revisar su sentido minero antes de P4. No se modificó ningún otro archivo `data/raw/`, el grid P2, `main.py` o gobernanza; no se instalaron dependencias ni se hizo commit/push. P4 y P6 no están autorizados.
 
 ## Decisiones y respuestas literales
 
@@ -1040,7 +1276,9 @@ Limitación: si se selecciona un filtro grande (por ejemplo, todos los bloques d
 
 ## Estado de planificación
 
-**P0–P6: síntesis del plan conceptual**
+**P0–P6: síntesis histórica del plan conceptual (antes de las verificaciones y gates posteriores)**
+
+La siguiente síntesis conserva el estado que tenía el plan al cerrarse la fase conceptual. No representa el estado actual: las actualizaciones posteriores de B09 y de P2_GRID, P3_TOPO, P4_GEO_ASSIGN y P5_VALIDATION que aparecen a continuación prevalecen para las etapas ya ejecutadas. P6 sigue sin autorización de implementación.
 
 - **P0 — orden y recuperación:** secuencia defendida: resolver B09/topografía y compatibilidad espacial, después cerrar la malla, aprobar reglas/pruebas de asignación, validar y visualizar. `RECOVERY_BLOCKED` se conserva; `BASE_VERIFIED` no se declara. No es autorización de código.
 - **P1 — dominios:** preservar códigos observados y contactos como evidencia, sin inventar sólidos; AIR no se infiere como estado físico; UNKNOWN lleva causa y procedencia/distancia/soporte trazables. Las decisiones conversacionales quedaron CORRECTA — H0.
@@ -1051,3 +1289,170 @@ Limitación: si se selecciona un filtro grande (por ejemplo, todos los bloques d
 - **P6 — visualizador:** herramienta de auditoría, códigos por litología (no por Cu), estados UNKNOWN/UNASSIGNED y AIR diferenciados, topografía solo verificada, cortes/filtros reproducibles por coordenada/estado/código con conteos visibles/ocultos. Usar la tabla completa como fuente y renderizar solo la selección. Se identificó Plotly existente como vía a reutilizar, sujeto a gate; filtros de bloques y rendimiento no probados. `P6_VISUALIZER` no aprobado.
 
 **Estado de gates:** El plan cumple conceptualmente el criterio `PLAN_APPROVED` del escenario (plan defendido con decisiones, orden, dependencias y bloqueos explícitos), por lo que se registra **`PLAN_APPROVED` — conceptual, bajo `RECOVERY_BLOCKED`**. Esto no equivale a `BASE_VERIFIED`, no autoriza implementación y no levanta los gates `P2_GRID`, P3, `P4_GEO_ASSIGN`, `P5_VALIDATION` o `P6_VISUALIZER`. Sin resolución/autorización de B09, el alcance ejecutable sigue bloqueado. No se generaron datos ni resultados en P2–P6.
+
+## Actualización posterior — P4_GEO_ASSIGN aprobado e implementado (2026-10-24)
+
+La siguiente respuesta literal del estudiante aprueba el gate P4 y queda como decisión; los radios continúan siendo escenarios de sensibilidad, no parámetros validados:
+
+> A. Sí, apruebo P4_GEO_ASSIGN con ese alcance, reglas y archivos (src/m01/geological_assignment.py, tests/m01/test_geological_assignment.py y data/processed/m01b_block_assignment.csv con 82,824 filas: 41,412 bloques × 2 radios).
+>
+> Dato real: hay 25,732 bloques ROCK elegibles y 5,332 composites (5,275 sample_id únicos, 35 sondajes); los radios de 20 y 30 m vienen del espaciamiento observado (distancia XY entre collars 20–92.195 m, mediana 60 m) y se comparan como sensibilidad, no como parámetros validados.
+> Ventaja: aplica exactamente las reglas ya decididas en P4.1–P4.10 y deja cada asignación trazable (causa, distancia, sample_id, n_holes), así que los UNKNOWN podrán analizarse por causa en P5.
+> Limitación: la asignación es categórica y preliminar; que una regla sea reproducible no demuestra continuidad geológica, y ningún radio queda validado por este resultado.
+
+Evaluación de la justificación: **CORRECTA — H0**. Los conteos de P3, composites y sondajes corresponden a las entradas actuales; la distinción entre comparación computacional y continuidad geológica está bien planteada.
+
+El gate aprobado implementa distancia euclidiana 3D del centro del bloque al `mid_x/mid_y/mid_z` del composite, aceptación inclusiva `distance <= radio`, concordancia unánime de `lith_code`, soporte contado tanto por composite como por `sample_id` único y `hole_id` distinto. Los composite AIR quedan excluidos y listados como exclusiones trazables. Solo ROCK puede ser `ASSIGNED` o `UNKNOWN`; AIR es `NOT_APPLICABLE`, PARTIAL es `UNASSIGNED/PARTIAL_TOPO` y otros estados topográficos no elegibles conservan causa. Se comparan 20 m y 30 m sin seleccionar un radio preferido.
+
+Implementación autorizada: `src/m01/geological_assignment.py`, `tests/m01/test_geological_assignment.py` y `data/processed/m01b_block_assignment.csv`. El cálculo de distancias procesa chunks para no materializar la matriz completa; no usa SciPy ni instala dependencias. Los resultados y comandos reales constan en EVIDENCE e IMP-002. Esto no autoriza P5 ni P6 y no declara `MINING_VALIDATED`.
+
+### Interpretación del estudiante de sensibilidad P4 — 2026-10-24
+
+Respuesta literal:
+
+> C. No prefiero ninguno todavía: conservo ambos radios como análisis de sensibilidad y dejo la selección pendiente de la revisión minera (P5), como definí en P4.3 y P5.3.
+>
+> Conteo observado (verificado de forma independiente: recalculé la asignación de los 25,732 bloques ROCK con los composites sin AIR y obtuve los mismos conteos en ambos radios): con 20 m se asignan 2,641 bloques (10.3 % de ROCK: DIO 1,011, POR 1,517, BRX 113, REG 0), con 22,730 INSUFFICIENT_SUPPORT y 361 CONFLICTING_CODES; con 30 m se asignan 4,984 (19.4 %: DIO 1,953, POR 2,896, BRX 131, REG 4), con 19,562 INSUFFICIENT_SUPPORT y 1,186 CONFLICTING_CODES. Al ampliar el radio, por cada 4 bloques que ganan soporte aproximadamente 1 pasa a conflicto (3,168 frente a825), lo que muestra que el aumento de cobertura viene acompañado de más incertidumbre en los contactos.
+>
+> Ventaja: no elijo por cobertura, que fue lo que decidí evitar; la diferencia entre radios queda como evidencia para P5, donde puedo revisar por ubicación (secciones, profundidad, cercanía a contactos) si los nuevos asignados y los nuevos conflictos de 30 m son razonables, y en P6 ambos escenarios pueden mostrarse con un filtro.
+>
+> Limitación: sin un radio elegido no hay un único modelo de bloques preliminar, y en ambos escenarios la mayoría de los bloques ROCK queda UNKNOWN (88.3 % con 20 m y 80.6 % con 30 m), por la densidad de 35 sondajes en una huella de 560 × 580 m. Además, REG casi no aparece (0 y 4 bloques) porque está en los primeros metros de los sondajes, cuyos bloques quedaron PARTIAL por la topografía: es un efecto de la regla P4.9, no una ausencia geológica.
+
+**Evaluación:** CORRECTA — H0 en cuanto a no elegir radio y conservar la sensibilidad; los conteos, porcentajes de asignación y UNKNOWN por causa coinciden con la salida P4. El aumento de `INSUFFICIENT_SUPPORT` resuelto es 3.168 y el de `CONFLICTING_CODES` es 825: 825/3.168 = 26,0 %, aproximadamente un conflicto por cada cuatro casos con nuevo soporte. Matiz para P5: la explicación de la escasez de `REG` no debe atribuirse solo a `PARTIAL_TOPO`; en la salida hay soporte REG en 87 bloques ROCK para 20 m, todos en conflicto, y en 338 para 30 m, de los cuales 334 están en conflicto y 4 asignados. La regla P4.9 explica los bloques PARTIAL excluidos, pero no todos los resultados REG bajos entre bloques ROCK. No se elige radio ni se declara validez minera.
+
+Se inicia P5 en modo de planificación/interpretación; no hay autorización para cambiar el método, crear nuevos diagnósticos automatizados ni implementar P6. El siguiente paso es acordar evidencia espacial para contrastar la diferencia entre radios y sus causas.
+
+## Actualización posterior — P5_VALIDATION aprobado e implementado (2026-10-24)
+
+Respuesta literal de aprobación:
+
+> A. Sí, apruebo P5_VALIDATION con ese alcance, metodología y archivos (src/m01/validation.py, tests/m01/test_validation.py, outputs/tables/m01b_holdout_by_hole.csv y outputs/tables/m01b_validation_diagnostics.csv).
+>
+> Dato real: hay 35 sondajes con 115–218 ensayes cada uno y 25,732 bloques ROCK; como los composites de un mismo sondaje están a 2 m y el collar vecino a 20–92.195 m, solo retirando el sondaje completo se mide la concordancia entre sondajes.
+> Ventaja: produce cobertura y concordancia por sondaje, radio y litología con denominadores explícitos, y separa los casos ambiguos en vez de forzarlos.
+> Limitación: es una validación cruzada de la regla con los mismos datos; no reemplaza la revisión geológica ni prueba continuidad de dominios, y con 35 sondajes los resultados por litología (sobre todo REG y BRX) tendrán pocos casos.
+
+> Condiciones:
+> 1) Solo C:\Proyecto_Plan\.venv\Scripts\python.exe desde la raíz y numpy (sin instalaciones). Reutiliza las funciones de asignación de src/m01/geological_assignment.py en lugar de duplicar la regla, para que el holdout aplique exactamente P4.
+> 2) Después de las pruebas específicas, ejecuta la suite completa e informa número de tests, exit code, comando y tiempo de ejecución.
+> 3) Informa en una tabla, para cada radio: referencias elegibles, asignadas, concordantes, UNKNOWN por causa, ambiguas, cobertura y concordancia totales y por litología (REG, DIO, POR, BRX), más los conteos de diagnósticos ERROR/WARNING/INFO.
+> 4) Si aparece algún ERROR, detente y repórtalo antes de documentarlo como resultado.
+>
+> No modifiques data/raw/, la malla, las salidas de P3 o P4, main.py ni la gobernanza; no hagas commit ni push. Esta aprobación no autoriza P6.
+
+La evaluación de la justificación es **CORRECTA — H0**. La unidad de holdout es el sondaje completo; el código reutiliza `build_geological_assignment` de P4 para los dos radios, excluyendo todo composite del sondaje retenido. Los puntos medios de composites se mapean a bloques; si un par sondaje–bloque ROCK contiene códigos observados múltiples, se informa como ambiguo y queda fuera del denominador de concordancia. Cobertura = asignados/referencias elegibles; concordancia = concordantes/asignados. Ambigüedades por litología muestran incidencia por código y pueden solaparse; el total cuenta referencias ambiguas únicas. Los resultados reales, severidades y comandos constan en EVIDENCE e IMP-002.
+
+El cálculo P5 terminó sin hallazgos `ERROR` (0), por lo que se escribieron las salidas. Hubo `WARNING` y `INFO`; estos no se convierten en aceptación automática. La interpretación del estudiante está registrada a continuación, pero el holdout y esa interpretación no constituyen revisión geológica independiente. No se declara `MINING_VALIDATED` ni `READY_FOR_REVIEW`; P6 sigue pendiente de gate.
+
+### Interpretación del estudiante de P5 y transición a P6 (2026-10-24)
+
+Respuesta literal:
+
+> C. Mantengo ambos radios como análisis de sensibilidad y aplazo la selección: el holdout es interno, la cobertura es limitada y el efecto del radio depende de la litología.
+>
+> Evidencia: cuando la regla asigna, la concordancia es alta en ambos radios (93.3 % con 20 m y 90.4 % con 30 m), pero la cobertura es baja (11.4 % y 20.9 % de 1,049 referencias). Pasar a 30 m casi duplica la cobertura con una pérdida global pequeña de concordancia, pero no de forma uniforme: DIO se mantiene (97.8 % → 96.9 %) y POR casi igual (90.0 % → 89.6 %), mientras que BRX cae de 91.4 % (32/35) a 56.3 % (9/16) y sus conflictos suben de 16 a 45. Esto es coherente con un cuerpo de brecha angosto (POR→BRX 5 y BRX→POR 2 contactos), donde un radio mayor incorpora composites de la roca encajante. Ningún radio es mejor para todas las litologías.
+>
+> Ventaja: no elijo por cobertura ni por un único número global. Conservar ambos escenarios deja visible que el radio debería depender de la litología (radio pequeño para cuerpos angostos como BRX), y en P6 los dos pueden compararse con un filtro.
+>
+> Limitación: el holdout usa los mismos 35 sondajes con los que se construye el modelo; la concordancia se calcula solo sobre los casos asignados (120 y 219), y BRX tiene muy pocos casos (35 y 16), así que esos porcentajes son inestables. REG no tiene referencias elegibles, por lo que no puedo evaluarlo. Esta evidencia muestra la consistencia de la regla con los datos, no la valida geológicamente, y no declaro MINING_VALIDATED.
+>
+> Pasemos a P6. El diseño ya está decidido en P6.1 y P6.2 (auditoría con Plotly: trayectorias y composites, bloques por lith_code y no por Cu, UNKNOWN por causa, AIR y PARTIAL distinguibles, topografía, cortes por i/j/k y filtros por código, estado y radio, con conteo de bloques visibles y ocultos). Propón el gate P6_VISUALIZER.
+
+**Evaluación inicial:** PARCIAL — H1, a la espera de aclarar el ámbito del conteo 5/2. El estudiante luego precisó que eran solo transiciones de los 57 ensayes que cruzan un contacto, no el total de intervalos de `lithology.csv`, y aceptó el conteo archivo-completo. Una comprobación independiente con `assay.csv` y contactos adyacentes de `lithology.csv` confirma 57 ensayes con 5 transiciones POR→BRX y 2 BRX→POR (57 `sample_id` distintos); el conjunto completo tiene 11 y 5, respectivamente. La explicación de cuerpo angosto queda como hipótesis no demostrada, como indica el estudiante.
+
+**Evaluación actualizada:** CORRECTA — H0. Mantener ambos radios es coherente con la cobertura limitada, la concordancia condicional y el resultado BRX de pocos casos. No se elige radio por litología con este holdout interno y no se declara `MINING_VALIDATED`.
+
+## Propuesta original de gate P6_VISUALIZER (posteriormente aprobada e implementada)
+
+**Microteoría:** una escena de bloques categóricos puede sugerir continuidad que el algoritmo no ha validado; una vista 3D no debe convertir celdas ocultas por filtros en ausentes ni confundir AIR/PARTIAL con UNKNOWN. La representación será un instrumento de auditoría espacial, no una nueva estimación ni una prueba minera. Los radios se conservarán como escenarios alternativos.
+
+**Evidencia disponible:** `src/m01/visualizer.py` ya genera HTML interactivo Plotly con trayectorias, intervalos litológicos y ensayes; no tiene la tabla de bloques, superficie topográfica ni filtros/cortes de P6. Hay 41.412 bloques, 5.332 composites y las salidas P2/P3/P4; `outputs/figures/m01_exploration_3d.html` ya es autocontenido y el CSV de trayectorias tiene 270 estaciones. El archivo de asignación contiene ambos radios; el P5 no seleccionó uno. Los resultados P5 confirman que hay cobertura limitada, conflictos sensibles al radio y ninguna base para declarar continuidad.
+
+**Alcance propuesto si se aprueba:**
+
+- Crear `src/m01/block_visualizer.py` y `tests/m01/test_block_visualizer.py`; no cambiar `main.py` ni sustituir el visualizador exploratorio existente.
+- Leer sin modificar `data/processed/m01b_block_grid.csv`, `m01b_block_topography.csv`, `m01b_topography_vertices.csv`, `m01b_block_assignment.csv`, `m01b_composites.csv` y `drillhole_trajectory.csv`.
+- Generar `outputs/figures/m01b_block_model_3d.html`, HTML autocontenido con Plotly ya disponible; no instalar dependencias. Representar bloques como cuboides con dimensiones/centros de P2, la superficie de vértices P3 sin extrapolar, trayectorias y segmentos de composites por `lith_code`.
+- Mantener separadas las categorías: ROCK asignado coloreado solo por `lith_code`; UNKNOWN por `assignment_cause`; AIR/NOT_APPLICABLE; PARTIAL/UNASSIGNED; y cualquier estado topográfico no soportado. Sin colorear bloques ni composites por `cu_pct`. Indicar el sistema cartesiano local y ejes en metros, sin afirmar CRS/EPSG.
+- Conservar la tabla completa y proporcionar filtros combinables por radio (20/30 m), código litológico, estado/causa y cortes por índice `i`, `j` o `k`. Renderizar solo la selección; mostrar el total del escenario, el número visible y el oculto por filtros/cortes, sin modificar o descartar filas fuente. Trayectorias, composites y topografía deben poder distinguirse de los bloques y controlarse como capas para limitar oclusión.
+- Pruebas mínimas: entradas/campos obligatorios y detección explícita de datos inválidos; geometría coherente de un bloque con su centro y dimensiones; categorías/leyenda diferenciadas sin Cu; filtros combinados por ambos radios, estado/causa, litología y cada eje; conteos visible + oculto iguales al total del escenario; separación de AIR/PARTIAL/UNKNOWN; superficie derivada solo de los 870 vértices entregados; HTML autocontenido y repetibilidad estructural. Probar también escenas pequeñas sintéticas para evitar depender solo del dataset real.
+- Validación de salida: verificar conteos por escenario frente al CSV, no asignar litología a no-ROCK, que composites AIR no aparezcan como soporte, abrir/revisar visualmente la figura y comprobar que la leyenda/capas no confundan estados. Reportar tamaño y tiempo de generación observados, sin declarar un umbral de rendimiento no aprobado ni convertir una vista plausible en validación geológica.
+- Ejecutar pruebas específicas y después `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m unittest discover -s tests -v`; reportar conteo de tests, exit code y tiempos. Respetar datos fuente, P2/P3/P4, `main.py` y gobernanza; sin instalaciones, commit o push.
+
+**Gate:** archivos propuestos `src/m01/block_visualizer.py`, `tests/m01/test_block_visualizer.py`, `outputs/figures/m01b_block_model_3d.html`; comando de generación propuesto `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m src.m01.block_visualizer`. Esta propuesta no autoriza código ni cambios de radio y no declara `MINING_VALIDATED` o `READY_FOR_REVIEW`.
+
+**Estamos listos para codificar esta etapa** solo si este alcance y sus pruebas quedan aprobados.
+
+**¿Apruebas el gate P6_VISUALIZER?**
+
+- **A.** Sí, apruebo exactamente el alcance, archivos, categorías, controles y pruebas descritos.
+- **B.** No; revisar el diseño, en particular las capas/filtros o la representación de la superficie y los cuboides.
+- **C.** Revisar primero las pruebas y validaciones de salida antes de decidir.
+
+Elige A, B o C y justifica con un dato real del repo, una ventaja y una limitación. Aún no se implementa P6. P5 permanece como consistencia computacional interna; P6 no reemplaza una revisión geológica independiente.
+
+### Aprobación e implementación P6_VISUALIZER (2026-10-24)
+
+**Aclaración literal del estudiante sobre P5:**
+
+> Aclaración sobre P5: los conteos 5 POR→BRX y 2 BRX→POR que cité corresponden solo al subconjunto de los 57 ensayes que cruzan un contacto (Decisión 5), no a todos los contactos de lithology.csv. Acepto tu verificación de 11 POR→BRX y 5 BRX→POR en todo el archivo, y mantengo la explicación del cuerpo angosto solo como hipótesis, no como causa demostrada.
+
+La comprobación independiente confirma los conteos en los dos ámbitos: 57 ensayes de 2 m cruzan contactos internos, distribuidos entre 5 POR→BRX y 2 BRX→POR para esas direcciones; el archivo completo tiene 11 y 5 contactos, respectivamente. Evaluación actualizada de P5: **CORRECTA — H0** para aplazar la selección de radio; la relación causal entre radio mayor y cuerpo angosto sigue siendo hipótesis, no conclusión.
+
+**Respuesta literal de aprobación:**
+
+> A. Sí, apruebo P6_VISUALIZER exactamente con ese alcance, archivos y pruebas (src/m01/block_visualizer.py, tests/m01/test_block_visualizer.py y outputs/figures/m01b_block_model_3d.html).
+>
+> Dato real: hay 41,412 bloques por radio (25,732 ROCK, 13,770 AIR y 1,910 PARTIAL), con 2,641 asignados con 20 m y 4,984 con 30 m; un corte k tiene 812 bloques y una sección i o j entre 1,344 y 1,428, por eso los cortes y filtros son necesarios.
+> Ventaja: reutiliza Plotly, que ya funciona en M01, y permite auditar en 3D lo decidido en P2–P5 (estados, causas y diferencias entre radios) junto a los sondajes y la topografía.
+> Limitación: es una herramienta visual de revisión, no una validación; los colores por litología pueden sugerir una continuidad que el modelo no demuestra, y mostrar muchos bloques a la vez puede hacer pesado el HTML.
+>
+> Condiciones:
+> 1) Solo C:\Proyecto_Plan\.venv\Scripts\python.exe desde la raíz, sin instalaciones.
+> 2) Que la vista inicial no cargue los 41,412 cuboides a la vez: que muestre por defecto los bloques asignados de un radio, o un corte, junto con trayectorias y topografía, e informa el tamaño final del HTML.
+> 3) Leyenda clara: colores por lith_code para ASSIGNED, y colores o capas distintos para UNKNOWN por causa, AIR y PARTIAL; ejes en metros y título que indique "modelo geológico preliminar, no validado".
+> 4) Después de las pruebas específicas, ejecuta la suite completa e informa número de tests, exit code, comando de generación y tiempo.
+>
+> No modifiques data/raw/, las salidas de P2–P5, main.py ni la gobernanza; no hagas commit ni push.
+
+Evaluación: **CORRECTA — H0**. La cautela sobre continuidad y peso del HTML es pertinente. Corrección de la cuenta por sección usando la grilla vigente de 51 capas: `k=812`, `i=29×51=1,479`, `j=28×51=1,428`; el conteo 1,344 es de una geometría anterior con 48 capas. La decisión de que hacen falta filtros/cortes se mantiene.
+
+**Implementación aprobada:** `src/m01/block_visualizer.py`, `tests/m01/test_block_visualizer.py` y `outputs/figures/m01b_block_model_3d.html`. El HTML autocontenido se genera con Plotly ya instalado; no modifica los artefactos P2–P5.
+
+- Vista inicial: solo ASSIGNED con radio 20 m (2,641 cuboides frente a los 41,412 del escenario), junto con topografía y trayectorias. Radio 30 m (4,984 asignados) se selecciona en el control; los cuboides de otras categorías se generan solo al cambiar los filtros. Composites se pueden activar como capa, ocultos inicialmente para reducir oclusión.
+- Controles combinables: radio 20/30 m, estado, `lith_code`, causa y cortes por `i`, `j` o `k`. El conteo muestra total del escenario, visibles y ocultos por filtros/corte. La tabla completa queda intacta.
+- La superficie P3 usa los 870 vértices soportados, triangulados sin extrapolar (1,624 triángulos); se superponen las 270 estaciones de trayectoria. Leyenda persistente: colores separados para ASSIGNED por código, UNKNOWN por causa, AIR y PARTIAL. Ejes en metros; título “M01B | Modelo geológico preliminar, no validado”. No se colorea por Cu.
+- HTML final: **18,325,116 bytes**; SHA-256 `C18082B5B1690509489B4AAFE0AEA90A60D5B84B6F245F643F510870806E796C`. Aunque el render inicial limita los cuboides, el HTML autocontenido y su metadata completa siguen siendo pesados.
+
+**Comandos ejecutados desde `C:\Proyecto_Plan\PlanMinUPN-G04`:**
+
+```powershell
+& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m unittest tests.m01.test_block_visualizer -v
+& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m src.m01.block_visualizer
+& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m unittest discover -s tests -v
+```
+
+Pruebas específicas: 7 PASS, exit code 0 (unittest: 0.491 s). Generación: exit code 0, **6.516 s**. Suite completa posterior: **88 tests PASS**, exit code 0; 53.968 s de cronómetro externo (unittest informó 51.572 s). Se probaron categorías/colores, exclusión de códigos en no-ROCK, filtros por radios/estado/causa/código/índices, geometría cuboidal, superficie sin extrapolación y HTML autocontenido/repetible.
+
+La implementación y su integridad computacional están verificadas; la inspección visual e interpretación del estudiante se registran a continuación. P6 es una herramienta de auditoría, no validación geológica. No se declara `MINING_VALIDATED` ni `READY_FOR_REVIEW`.
+
+### Revisión visual del estudiante y autorización de commit/push (2026-10-24)
+
+Respuesta literal:
+
+> A. La visualización sirve para revisar la proximidad de las asignaciones a los sondajes y la topografía, y para ver patrones aparentes, pero no permite concluir continuidad geológica.
+>
+> Observación concreta: con radio 20 m la vista inicial muestra 2,641 bloques ASSIGNED que forman columnas verticales a lo largo de cada trayectoria, con un núcleo POR (naranja) en el centro del área rodeado de DIO (verde) y pocos bloques BRX (rojo) en la parte profunda, alrededor de Z ≈ 3100 m; entre sondajes no hay bloques asignados. Al cambiar a 30 m (4,984 visibles) las columnas se ensanchan y comienzan a unirse, y aparecen pocos bloques REG cerca de la superficie. En el corte k = 25 con estado UNKNOWN (466 bloques visibles), casi todo el nivel corresponde a INSUFFICIENT_SUPPORT (amarillo) y los CONFLICTING_CODES (morado) se ubican junto a los sondajes, donde hay contactos dentro del radio. Todos los bloques quedan bajo la superficie topográfica y las trayectorias pasan por el centro de las columnas.
+>
+> Ventaja: permite auditar en 3D lo decidido en P2–P5: que la litología solo aparece en bloques ROCK cerca de su soporte, dónde se concentran los UNKNOWN por causa y cómo cambia el modelo entre radios, con el contador de visibles y ocultos para no confundir un bloque filtrado con uno inexistente.
+>
+> Limitación: el patrón POR al centro y DIO alrededor es aparente: las columnas son el reflejo de la geometría de los sondajes y del radio, no de una superficie de contacto interpretada, y el espacio vacío entre sondajes (UNKNOWN) es la mayor parte del volumen ROCK. La figura no valida dominios ni continuidad, y no declaro MINING_VALIDATED.
+>
+> Con esto P6 queda revisado. Autorizo un commit en la rama feature/t2-m01b-block-model solo con los archivos de P2–P6 (módulos en src/m01/, sus pruebas en tests/m01/, data/raw/Topopl.csv, las salidas en data/processed/, outputs/tables/ y outputs/figures/m01b_block_model_3d.html) y la actualización de PLAN, EVIDENCE e IMP-002, sin git add. Antes del commit ejecuta la suite completa y muéstrame git status y git diff --cached --stat. Después del commit, haz git push a origin feature/t2-m01b-block-model (sin merge ni push a main).
+
+**Evaluación:** CORRECTA — H0. La interpretación separa los patrones espaciales observados de continuidad geológica, usa coberturas y estados por radio, y reconoce el efecto de la geometría de sondajes y del muestreo. Las 2,641 y 4,984 asignaciones y el significado de UNKNOWN corresponden a P4. En el grid vigente, el plano `k=25` contiene 812 celdas; el conteo de 466 visibles para el filtro UNKNOWN queda registrado como observación del estudiante, no como validación independiente de la interfaz. La figura no demuestra que todos los bloques estén bajo la superficie como afirmación general para toda malla posible; la clasificación P3 actual indica que los bloques con topo states UNKNOWN/OUTSIDE son cero, y solo ROCK obtiene asignación. No se declara `MINING_VALIDATED`.
+
+**Alcance autorizado para commit:** únicamente fuentes P2–P6 y sus pruebas, Topopl, artefactos procesados, tablas/figura generadas, y estos tres documentos. El usuario pidió expresamente no ejecutar `git add`; para incluir archivos nuevos, se actualizará el índice solo con paths autorizados mediante una operación de bajo nivel, sin invocar `git add`, y antes del commit se presentarán status, nombres staged y `git diff --cached --stat`. No se incluirán cambios ajenos al alcance. Se ejecutará primero la suite completa final. Tras verificar el commit, se hará push solo a `origin feature/t2-m01b-block-model`; no merge ni push a main.
+### Correccion final del HTML generado para precommit
+
+Para corregir el `git diff --cached --check` que detecto espacios finales en el bundle HTML, el generador ahora elimina espacios al final de cada linea del HTML autocontenido antes de escribirlo. El cambio solo afecta whitespace generado, no la figura ni los datos. Regeneracion: `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m src.m01.block_visualizer`, exit code 0, 7.043 s, 18,325,093 bytes, SHA-256 `908365C3F39541E34047DBC90896D635111B2C99698DD731602A5D09AA39D95D`. Pruebas P6 especificas: 7 PASS, exit code 0. Suite completa final: `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m unittest discover -s tests -v`, 88 PASS, exit code 0, 56.652 s de cronometro externo (54.329 s de unittest). Commit y push siguen pendientes hasta confirmar diff/status y el permiso ya concedido.
