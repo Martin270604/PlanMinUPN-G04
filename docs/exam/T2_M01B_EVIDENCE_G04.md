@@ -1294,3 +1294,16 @@ La autorización acota el commit a código y pruebas P2–P6, `data/raw/Topopl.c
 ### Correccion final precommit del HTML P6
 
 El primer `git diff --cached --check` encontro espacios finales en el HTML generado, incluidos lineas del bundle Plotly. Se ajusto el generador para retirar whitespace final por linea y se regenero el mismo visualizador; los datos, la escena y los controles no cambian. Resultado: 18,325,093 bytes; SHA-256 `908365C3F39541E34047DBC90896D635111B2C99698DD731602A5D09AA39D95D`; comando `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m src.m01.block_visualizer`; exit code 0, 7.043 s. Pruebas especificas P6: 7 PASS, exit code 0. Suite completa final: `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m unittest discover -s tests -v`, 88 PASS, exit code 0, 56.652 s externos (54.329 s unittest).
+
+### Capturas de la revision visual del estudiante (2026-10-25)
+
+El estudiante agrego cuatro capturas tomadas desde `outputs/figures/m01b_block_model_3d.html`. Se registran como evidencia visual aportada por el estudiante; no se modificaron las imagenes:
+
+| Archivo | Vista documentada |
+|---|---|
+| `outputs/figures/m01b_vista_radio20_assigned.png` | Vista inicial con radio de 20 m. |
+| `outputs/figures/m01b_vista_radio20_todos.png` | Todos los estados con radio de 20 m. |
+| `outputs/figures/m01b_vista_radio20_unknown.png` | Solo UNKNOWN con radio de 20 m. |
+| `outputs/figures/m01b_vista_radio30_assigned.png` | ASSIGNED con radio de 30 m. |
+
+Hashes SHA-256 observados antes del commit, en el mismo orden: `9C335B156BB2A53A431944B4C444ED5BCD017FC3BB2F8499C90BBF3546C03E8B`, `632B1765C093CA21184AF112E42BE83CE08D63AEF774F928AFE95BCC7635BC3C`, `387DA40424BC1E0311A959FBC08E7F5A7781F10C903ADDB333E0EDD69EE11524` y `167F3976404C0A376C200FDF94C1FFFDD5AB8A39268ACDF360FC6EA71B942658`. Las capturas documentan las vistas indicadas, no constituyen por si solas validacion geologica ni una nueva interpretacion del modelo.

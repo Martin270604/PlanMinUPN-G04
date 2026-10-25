@@ -361,3 +361,7 @@ Pruebas específicas: 7 PASS, exit code 0. Suite completa posterior: 88 tests PA
 ### Correccion del whitespace del HTML P6 (precommit)
 
 El chequeo del indice detecto trailing whitespace en el HTML autocontenido. El generador ahora elimina whitespace al final de cada linea, sin alterar la escena ni el contenido funcional. Regenerado con `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m src.m01.block_visualizer`: exit code 0, 7.043 s; 18,325,093 bytes; SHA-256 `908365C3F39541E34047DBC90896D635111B2C99698DD731602A5D09AA39D95D`. Pruebas especificas: 7 PASS, exit code 0. Suite completa: `& 'C:\Proyecto_Plan\.venv\Scripts\python.exe' -m unittest discover -s tests -v`, 88 PASS, exit code 0, 56.652 s externos (54.329 s unittest). Confirmacion del indice y publicacion siguen pendientes.
+
+### Capturas de revision visual del estudiante (2026-10-25)
+
+Se incorporan como evidencia aportada por el estudiante cuatro capturas del visualizador `outputs/figures/m01b_block_model_3d.html`: `m01b_vista_radio20_assigned.png` (vista inicial, 20 m), `m01b_vista_radio20_todos.png` (todos los estados, 20 m), `m01b_vista_radio20_unknown.png` (solo UNKNOWN, 20 m) y `m01b_vista_radio30_assigned.png` (ASSIGNED, 30 m). Las imagenes se conservaron sin modificaciones. No se consideran validacion geologica; hashes SHA-256 se registran en `docs/exam/T2_M01B_EVIDENCE_G04.md`.
