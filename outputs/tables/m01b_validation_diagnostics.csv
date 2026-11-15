@@ -1,0 +1,23 @@
+﻿severity,diagnostic_id,radius_m,hole_id,lith_code,count,details
+WARNING,HOLDOUT_INSUFFICIENT_SUPPORT,20,,,902,Held-out ROCK reference blocks without an assigned prediction.
+WARNING,HOLDOUT_CONFLICTING_CODES,20,,,27,Held-out ROCK reference blocks without an assigned prediction.
+WARNING,AMBIGUOUS_HOLDOUT_REFERENCE,20,,AMBIGUOUS,37,A held-out hole has multiple observed lithologies in one ROCK block; excluded from concordance denominators.
+WARNING,N_HOLES_ONE,20,,,103,Held-out reference blocks with one supporting hole.
+WARNING,SUPPORT_WITHIN_1M_OF_RADIUS,20,,,142,At least one included support composite lies within 1 m inside the radius boundary; outside-boundary neighbors are not counted here.
+WARNING,PARTIAL_TOPO_REFERENCE_EXCLUDED,20,,,303,Held-out non-AIR composites in PARTIAL blocks were excluded from ROCK reference metrics.
+WARNING,AIR_COMPOSITE_REVIEW,20,,AIR,1,The source code AIR remains excluded from geological support and requires semantic review.
+INFO,HOLDOUT_FOLDS,20,,,35,One fold per hole; all its composites were excluded from training.
+INFO,NONROCK_REFERENCE_COMPOSITES,20,,,303,Held-out non-AIR composites whose midpoint falls in AIR/PARTIAL/unknown topography; excluded from ROCK metrics.
+INFO,AIR_REFERENCE_COMPOSITES_EXCLUDED,20,,AIR,1,AIR composites are not geological support or validation references.
+INFO,NONROCK_REFERENCE_PARTIAL,20,,,303,Count of non-AIR composite midpoints excluded because their mapped block is not ROCK.
+WARNING,HOLDOUT_INSUFFICIENT_SUPPORT,30,,,740,Held-out ROCK reference blocks without an assigned prediction.
+WARNING,HOLDOUT_CONFLICTING_CODES,30,,,90,Held-out ROCK reference blocks without an assigned prediction.
+WARNING,AMBIGUOUS_HOLDOUT_REFERENCE,30,,AMBIGUOUS,37,A held-out hole has multiple observed lithologies in one ROCK block; excluded from concordance denominators.
+WARNING,N_HOLES_ONE,30,,,219,Held-out reference blocks with one supporting hole.
+WARNING,SUPPORT_WITHIN_1M_OF_RADIUS,30,,,282,At least one included support composite lies within 1 m inside the radius boundary; outside-boundary neighbors are not counted here.
+WARNING,PARTIAL_TOPO_REFERENCE_EXCLUDED,30,,,303,Held-out non-AIR composites in PARTIAL blocks were excluded from ROCK reference metrics.
+WARNING,AIR_COMPOSITE_REVIEW,30,,AIR,1,The source code AIR remains excluded from geological support and requires semantic review.
+INFO,HOLDOUT_FOLDS,30,,,35,One fold per hole; all its composites were excluded from training.
+INFO,NONROCK_REFERENCE_COMPOSITES,30,,,303,Held-out non-AIR composites whose midpoint falls in AIR/PARTIAL/unknown topography; excluded from ROCK metrics.
+INFO,AIR_REFERENCE_COMPOSITES_EXCLUDED,30,,AIR,1,AIR composites are not geological support or validation references.
+INFO,NONROCK_REFERENCE_PARTIAL,30,,,303,Count of non-AIR composite midpoints excluded because their mapped block is not ROCK.
